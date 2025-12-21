@@ -67,21 +67,38 @@ DC-Source/
 
 ### Python Server (Raspberry Pi)
 
+#### Požadavky
+
+- Raspberry Pi s Raspberry Pi OS (nebo jinou Debian-based distribucí)
+- Python 3.6 nebo vyšší
+- dhcpcd (síťový správce pro statickou IP konfiguraci)
+- sudo oprávnění
+
 #### Automatická instalace (doporučeno)
 
 1. **Naklonujte nebo stáhněte projekt:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/<your-username>/DC-Source.git
    cd DC-Source
    ```
 
-2. **Spusťte instalační skript:**
+2. **Instalace dhcpcd (pokud není nainstalován):**
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y dhcpcd5
+   sudo systemctl enable dhcpcd
+   sudo systemctl start dhcpcd
+   ```
+
+3. **Spusťte instalační skript:**
    ```bash
    cd server
+   sudo chmod +x install.sh
    sudo ./install.sh
    ```
 
 Instalační skript automaticky:
+- Zkontroluje a případně nainstaluje Python 3
 - Vytvoří adresář `/opt/raspberry-config-server`
 - Zkopíruje server soubory
 - Nastaví oprávnění
@@ -90,14 +107,48 @@ Instalační skript automaticky:
 
 #### Manuální instalace
 
-1. **Kopírování souborů:**
+1. **Aktualizace systému:**
+   ```bash
+   sudo apt-get update
+   sudo apt-get upgrade -y
+   ```
+
+2. **Instalace dhcpcd (pokud není nainstalován):**
+   ```bash
+   sudo apt-get install -y dhcpcd5
+   sudo systemctl enable dhcpcd
+   sudo systemctl start dhcpcd
+   ```
+
+3. **Kontrola, zda je dhcpcd aktivní:**
+   ```bash
+   sudo systemctl status dhcpcd
+   ```
+   Pokud není aktivní, spusťte:
+   ```bash
+   sudo systemctl enable dhcpcd
+   sudo systemctl start dhcpcd
+   ```
+
+4. **Instalace Python 3 (pokud není nainstalován):**
+   ```bash
+   sudo apt-get install -y python3 python3-pip
+   ```
+
+5. **Kopírování souborů:**
    ```bash
    sudo mkdir -p /opt/raspberry-config-server
    sudo cp raspberry_config_server.py /opt/raspberry-config-server/
    sudo chmod +x /opt/raspberry-config-server/raspberry_config_server.py
    ```
 
-2. **Instalace systemd service:**
+6. **Vytvoření log souboru:**
+   ```bash
+   sudo touch /var/log/raspberry_config_server.log
+   sudo chmod 644 /var/log/raspberry_config_server.log
+   ```
+
+7. **Instalace systemd service:**
    ```bash
    sudo cp raspberry-config-server.service /etc/systemd/system/
    sudo systemctl daemon-reload
@@ -105,15 +156,81 @@ Instalační skript automaticky:
    sudo systemctl start raspberry-config-server
    ```
 
-3. **Kontrola stavu:**
+8. **Kontrola stavu:**
    ```bash
    sudo systemctl status raspberry-config-server
    ```
 
-4. **Zobrazení logů (včetně debug zpráv):**
+9. **Zobrazení logů (včetně debug zpráv):**
    ```bash
    sudo journalctl -u raspberry-config-server -f
    ```
+
+#### Ověření instalace
+
+1. **Zkontrolujte, zda server běží:**
+   ```bash
+   sudo systemctl is-active raspberry-config-server
+   ```
+   Mělo by vrátit: `active`
+
+2. **Zkontrolujte, zda server naslouchá na portu 7777:**
+   ```bash
+   sudo netstat -tlnp | grep 7777
+   ```
+   Nebo:
+   ```bash
+   sudo ss -tlnp | grep 7777
+   ```
+
+3. **Test připojení z jiného počítače:**
+   ```bash
+   telnet <raspberry-pi-ip> 7777
+   ```
+   Nebo:
+   ```bash
+   nc -zv <raspberry-pi-ip> 7777
+   ```
+
+#### Řešení problémů s instalací
+
+**Problém: dhcpcd není nainstalován nebo není aktivní**
+
+```bash
+# Instalace dhcpcd
+sudo apt-get install -y dhcpcd5
+
+# Aktivace a spuštění služby
+sudo systemctl enable dhcpcd
+sudo systemctl start dhcpcd
+
+# Kontrola stavu
+sudo systemctl status dhcpcd
+```
+
+**Problém: Server se nespustí**
+
+```bash
+# Zkontrolujte logy
+sudo journalctl -u raspberry-config-server -n 50
+
+# Zkontrolujte syntaxi Python souboru
+sudo python3 -m py_compile /opt/raspberry-config-server/raspberry_config_server.py
+
+# Zkontrolujte oprávnění
+ls -la /opt/raspberry-config-server/
+```
+
+**Problém: Port 7777 je již používán**
+
+```bash
+# Zjistěte, který proces používá port
+sudo lsof -i :7777
+# nebo
+sudo netstat -tlnp | grep 7777
+
+# Pokud je to jiný proces, buď ho zastavte, nebo změňte port v raspberry_config_server.py
+```
 
 ### C# Client (Windows)
 

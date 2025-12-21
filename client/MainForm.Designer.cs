@@ -58,6 +58,13 @@ namespace DeviceConfigurator
         // Status
         private Label _statusLabel;
         private Panel _statusPanel;
+        private ProgressBar _scanProgressBar;
+        
+        // Menu
+        private MenuStrip _mainMenuStrip;
+        private ToolStripMenuItem _configMenu;
+        private ToolStripMenuItem _downloadConfigMenuItem;
+        private ToolStripMenuItem _uploadConfigMenuItem;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -84,19 +91,46 @@ namespace DeviceConfigurator
 
             // Formulář
             this.Text = "Device Configurator - Raspberry Pi";
-            this.Size = new Size(900, 750);
+            this.Size = new Size(900, 770);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.Sizable;
-            this.MinimumSize = new Size(800, 650);
+            this.MinimumSize = new Size(800, 670);
             this.BackColor = SystemColors.Control;
 
+            // ========== MENU STRIP ==========
+            _mainMenuStrip = new MenuStrip();
+            _mainMenuStrip.Location = new Point(0, 0);
+            _mainMenuStrip.Size = new Size(900, 24);
+            _mainMenuStrip.Text = "mainMenuStrip";
+            
+            // Config menu
+            _configMenu = new ToolStripMenuItem();
+            _configMenu.Text = "Config";
+            _configMenu.Size = new Size(50, 20);
+            
+            // Download config
+            _downloadConfigMenuItem = new ToolStripMenuItem();
+            _downloadConfigMenuItem.Text = "Stáhnout konfiguraci";
+            _downloadConfigMenuItem.Size = new Size(200, 22);
+            
+            // Upload config
+            _uploadConfigMenuItem = new ToolStripMenuItem();
+            _uploadConfigMenuItem.Text = "Nahrát konfiguraci";
+            _uploadConfigMenuItem.Size = new Size(200, 22);
+            
+            _configMenu.DropDownItems.Add(_downloadConfigMenuItem);
+            _configMenu.DropDownItems.Add(_uploadConfigMenuItem);
+            _mainMenuStrip.Items.Add(_configMenu);
+            
+            this.MainMenuStrip = _mainMenuStrip;
+            
             // ========== LEVÁ STRANA - SEZNAM ZAŘÍZENÍ A SKENOVÁNÍ ==========
             
             // GroupBox pro seznam zařízení
             _devicesGroupBox = new GroupBox
             {
                 Text = "Nalezená zařízení",
-                Location = new Point(12, 12),
+                Location = new Point(12, 28), // Posunuto dolů o 24px pro menu
                 Size = new Size(320, 280),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left
             };
@@ -202,7 +236,7 @@ namespace DeviceConfigurator
             _configGroupBox = new GroupBox
             {
                 Text = "Aktuální konfigurace",
-                Location = new Point(340, 12),
+                Location = new Point(340, 28), // Posunuto dolů o 24px pro menu
                 Size = new Size(540, 200),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
@@ -334,7 +368,7 @@ namespace DeviceConfigurator
             _editGroupBox = new GroupBox
             {
                 Text = "Úprava konfigurace",
-                Location = new Point(340, 220),
+                Location = new Point(340, 236), // Posunuto dolů o 24px pro menu
                 Size = new Size(540, 480),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
@@ -512,25 +546,41 @@ namespace DeviceConfigurator
             _statusPanel = new Panel
             {
                 Location = new Point(0, 710),
-                Size = new Size(900, 30),
+                Size = new Size(900, 50),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = SystemColors.ControlDark,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
+            // Progress bar pro skenování
+            _scanProgressBar = new ProgressBar
+            {
+                Location = new Point(10, 5),
+                Size = new Size(880, 20),
+                Style = ProgressBarStyle.Continuous,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 0,
+                Visible = false,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            };
+
             _statusLabel = new Label
             {
                 Text = "Připraveno. Zadejte IP rozsah nebo klikněte na 'Skenovat síť' pro začátek.",
-                Location = new Point(10, 5),
+                Location = new Point(10, 28),
                 Size = new Size(880, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 ForeColor = SystemColors.ControlText,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
+            _statusPanel.Controls.Add(_scanProgressBar);
             _statusPanel.Controls.Add(_statusLabel);
             this.Controls.Add(_statusPanel);
+            this.Controls.Add(_mainMenuStrip);
 
             this.ResumeLayout(false);
+            this.PerformLayout();
         }
 
         #endregion

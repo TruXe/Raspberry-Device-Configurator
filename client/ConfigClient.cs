@@ -30,10 +30,10 @@ namespace DeviceConfigurator
                     // Připojení s timeoutem
                     DebugLogger.Log($"SendRequestAsync: Vytvářím TCP připojení...");
                     var connectTask = client.ConnectAsync(ipAddress, _port);
-                    var timeoutTask = Task.Delay(_timeout);
+                    var connectTimeoutTask = Task.Delay(_timeout);
 
-                    var completedTask = await Task.WhenAny(connectTask, timeoutTask);
-                    if (completedTask == timeoutTask)
+                    var connectCompletedTask = await Task.WhenAny(connectTask, connectTimeoutTask);
+                    if (connectCompletedTask == connectTimeoutTask)
                     {
                         DebugLogger.Log($"SendRequestAsync: Timeout při připojování");
                         return new ConfigResponse
@@ -76,11 +76,27 @@ namespace DeviceConfigurator
                     System.IO.MemoryStream responseStream = new System.IO.MemoryStream();
                     byte[] buffer = new byte[4096];
                     int totalBytesRead = 0;
+                    const int readTimeoutMs = 60000; // 60 sekund timeout pro čtení odpovědi
+                    var readStartTime = DateTime.Now;
                     
                     try
                     {
-                        // První čtení - obvykle obsahuje všechna data
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                        // První čtení s timeoutem - obvykle obsahuje všechna data
+                        var readTask = stream.ReadAsync(buffer, 0, buffer.Length);
+                        var timeoutTask = Task.Delay(readTimeoutMs);
+                        var completedTask = await Task.WhenAny(readTask, timeoutTask);
+                        
+                        if (completedTask == timeoutTask)
+                        {
+                            DebugLogger.Log($"SendRequestAsync: Timeout při čtení odpovědi (60 sekund)");
+                            return new ConfigResponse
+                            {
+                                Status = "error",
+                                Error = "Timeout při čtení odpovědi ze serveru (60 sekund)"
+                            };
+                        }
+                        
+                        int bytesRead = await readTask;
                         DebugLogger.Log($"SendRequestAsync: První čtení: {bytesRead} bajtů");
                         
                         if (bytesRead > 0)
@@ -91,11 +107,30 @@ namespace DeviceConfigurator
                         
                         // Pokud jsou ještě data dostupná, přečteme je
                         // Zkusíme několikrát, protože data mohou přijít postupně
+                        // Ale s kontrolou timeoutu
                         for (int i = 0; i < 5 && totalBytesRead < 8192; i++)
                         {
+                            // Kontrola timeoutu
+                            if ((DateTime.Now - readStartTime).TotalMilliseconds > readTimeoutMs)
+                            {
+                                DebugLogger.Log($"SendRequestAsync: Timeout při čtení dalších dat");
+                                break;
+                            }
+                            
                             if (stream.DataAvailable)
                             {
-                                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                                var nextReadTask = stream.ReadAsync(buffer, 0, buffer.Length);
+                                var remainingTimeout = Math.Max(1000, readTimeoutMs - (int)(DateTime.Now - readStartTime).TotalMilliseconds);
+                                var nextTimeoutTask = Task.Delay(remainingTimeout);
+                                var nextCompletedTask = await Task.WhenAny(nextReadTask, nextTimeoutTask);
+                                
+                                if (nextCompletedTask == nextTimeoutTask)
+                                {
+                                    DebugLogger.Log($"SendRequestAsync: Timeout při čtení dalších dat");
+                                    break;
+                                }
+                                
+                                bytesRead = await nextReadTask;
                                 DebugLogger.Log($"SendRequestAsync: Další čtení #{i + 1}: {bytesRead} bajtů");
                                 
                                 if (bytesRead == 0)
@@ -106,7 +141,14 @@ namespace DeviceConfigurator
                             }
                             else
                             {
-                                // Počkáme krátce na další data
+                                // Počkáme krátce na další data, ale s kontrolou timeoutu
+                                var elapsed = (DateTime.Now - readStartTime).TotalMilliseconds;
+                                if (elapsed > readTimeoutMs - 100)
+                                {
+                                    DebugLogger.Log($"SendRequestAsync: Timeout při čekání na data");
+                                    break;
+                                }
+                                
                                 await Task.Delay(50);
                                 if (!stream.DataAvailable)
                                     break;
