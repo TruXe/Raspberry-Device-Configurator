@@ -32,8 +32,9 @@ namespace DeviceConfigurator
             _downloadConfigMenuItem.Click += DownloadConfigMenuItem_Click;
             _uploadConfigMenuItem.Click += UploadConfigMenuItem_Click;
             
-            // Automatické načtení konfigurace při startu
-            LoadSavedConfigOnStartup();
+            // ZAKOMENTOVÁNO: Automatické načtení konfigurace při startu
+            // Uživatel musí manuálně kliknout na skenování
+            // LoadSavedConfigOnStartup();
         }
 
         private async void ScanButton_Click(object? sender, EventArgs e)
