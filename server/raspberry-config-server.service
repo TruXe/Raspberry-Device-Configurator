@@ -1,0 +1,17 @@
+[Unit]
+Description=Raspberry Pi Configuration Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/raspberry-config-server
+ExecStart=/usr/bin/python3 /opt/raspberry-config-server/raspberry_config_server.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
