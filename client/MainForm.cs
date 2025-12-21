@@ -21,6 +21,10 @@ namespace DeviceConfigurator
 
         public MainForm()
         {
+            // Načteme uložený jazyk před inicializací komponent
+            var savedLanguage = Localization.LoadLanguage();
+            Localization.SetLanguage(savedLanguage);
+            
             InitializeComponent();
             _scanner = new NetworkScanner();
             _client = new ConfigClient();
@@ -31,10 +35,94 @@ namespace DeviceConfigurator
             // Připojení event handlerů pro menu
             _downloadConfigMenuItem.Click += DownloadConfigMenuItem_Click;
             _uploadConfigMenuItem.Click += UploadConfigMenuItem_Click;
+            _languageCzechMenuItem.Click += LanguageCzechMenuItem_Click;
+            _languageEnglishMenuItem.Click += LanguageEnglishMenuItem_Click;
+            
+            // Aktualizujeme UI podle zvoleného jazyka
+            UpdateLanguageUI();
             
             // ZAKOMENTOVÁNO: Automatické načtení konfigurace při startu
             // Uživatel musí manuálně kliknout na skenování
             // LoadSavedConfigOnStartup();
+        }
+        
+        /// <summary>
+        /// Aktualizuje UI podle aktuálního jazyka.
+        /// </summary>
+        private void UpdateLanguageUI()
+        {
+            // Formulář
+            this.Text = Localization.GetString("FormTitle");
+            
+            // Menu
+            _configMenu.Text = Localization.GetString("MenuConfig");
+            _downloadConfigMenuItem.Text = Localization.GetString("MenuDownloadConfig");
+            _uploadConfigMenuItem.Text = Localization.GetString("MenuUploadConfig");
+            _languageMenu.Text = Localization.GetString("MenuLanguage");
+            _languageCzechMenuItem.Text = Localization.GetString("MenuLanguageCzech");
+            _languageEnglishMenuItem.Text = Localization.GetString("MenuLanguageEnglish");
+            
+            // GroupBoxy
+            _devicesGroupBox.Text = Localization.GetString("DevicesGroupBox");
+            _devicesLabel.Text = Localization.GetString("DevicesLabel");
+            _scanGroupBox.Text = Localization.GetString("ScanGroupBox");
+            _ipRangeLabel.Text = Localization.GetString("IpRangeLabel");
+            _scanRangeButton.Text = Localization.GetString("ScanRangeButton");
+            _scanButton.Text = Localization.GetString("ScanButton");
+            _refreshButton.Text = Localization.GetString("RefreshButton");
+            _debugConsoleButton.Text = Localization.GetString("DebugConsoleButton");
+            _configGroupBox.Text = Localization.GetString("ConfigGroupBox");
+            _ipLabel.Text = Localization.GetString("IpLabel");
+            _hostnameLabel.Text = Localization.GetString("HostnameLabel");
+            _portLabel.Text = Localization.GetString("PortLabel");
+            _sshStatusLabel.Text = Localization.GetString("SshLabel");
+            _rootLoginLabel.Text = Localization.GetString("RootLoginLabel");
+            _rootPasswordLabel.Text = Localization.GetString("RootPasswordLabel");
+            _editGroupBox.Text = Localization.GetString("EditGroupBox");
+            _newHostnameLabel.Text = Localization.GetString("NewHostnameLabel");
+            _usernameLabel.Text = Localization.GetString("UsernameLabel");
+            _passwordLabel.Text = Localization.GetString("PasswordLabel");
+            _rootPasswordEditLabel.Text = Localization.GetString("RootPasswordEditLabel");
+            _staticIpLabel.Text = Localization.GetString("StaticIpLabel");
+            _netmaskLabel.Text = Localization.GetString("NetmaskLabel");
+            _gatewayLabel.Text = Localization.GetString("GatewayLabel");
+            _sshEnabledCheckBox.Text = Localization.GetString("SshEnabledCheckBox");
+            _rootLoginCheckBox.Text = Localization.GetString("RootLoginCheckBox");
+            _saveButton.Text = Localization.GetString("SaveButton");
+            
+            // Status
+            _statusLabel.Text = Localization.GetString("StatusReady");
+            
+            // Aktualizujeme označení jazyka v menu
+            UpdateLanguageMenuCheckmarks();
+        }
+        
+        /// <summary>
+        /// Aktualizuje zaškrtnutí u jazykových položek v menu.
+        /// </summary>
+        private void UpdateLanguageMenuCheckmarks()
+        {
+            var currentLang = Localization.GetCurrentLanguage();
+            _languageCzechMenuItem.Checked = (currentLang == Localization.Language.Czech);
+            _languageEnglishMenuItem.Checked = (currentLang == Localization.Language.English);
+        }
+        
+        /// <summary>
+        /// Handler pro výběr češtiny.
+        /// </summary>
+        private void LanguageCzechMenuItem_Click(object? sender, EventArgs e)
+        {
+            Localization.SetLanguage(Localization.Language.Czech);
+            UpdateLanguageUI();
+        }
+        
+        /// <summary>
+        /// Handler pro výběr angličtiny.
+        /// </summary>
+        private void LanguageEnglishMenuItem_Click(object? sender, EventArgs e)
+        {
+            Localization.SetLanguage(Localization.Language.English);
+            UpdateLanguageUI();
         }
 
         private async void ScanButton_Click(object? sender, EventArgs e)
@@ -50,7 +138,7 @@ namespace DeviceConfigurator
             DebugLogger.Log("PerformHostnameScanAsync: Začátek skenování podle hostname");
             _scanButton.Enabled = false;
             _scanRangeButton.Enabled = false;
-            _statusLabel.Text = "Skenování sítě podle hostname...";
+            _statusLabel.Text = Localization.GetString("StatusScanning");
             _statusLabel.ForeColor = Color.Blue;
             _scanProgressBar.Visible = true;
             _scanProgressBar.Value = 0;
@@ -83,7 +171,7 @@ namespace DeviceConfigurator
 
                 if (devices.Count == 0)
                 {
-                    _statusLabel.Text = "Nebyla nalezena žádná zařízení. Zkuste znovu nebo použijte skenování IP rozsahu.";
+                    _statusLabel.Text = Localization.GetString("StatusNoDevices");
                     _statusLabel.ForeColor = Color.Orange;
                 }
                 else
@@ -95,7 +183,7 @@ namespace DeviceConfigurator
                     {
                         _devicesListBox.Items.Add(device);
                     }
-                    _statusLabel.Text = $"Nalezeno {devices.Count} zařízení.";
+                    _statusLabel.Text = string.Format(Localization.GetString("StatusDevicesFound"), devices.Count);
                     _statusLabel.ForeColor = Color.Green;
                     
                     // Pokud máme cílové hostname nebo očekávanou novou IP, zkusíme najít zařízení
@@ -144,7 +232,7 @@ namespace DeviceConfigurator
                                     await LoadDeviceConfigAsync();
                                     this.Invoke((MethodInvoker)delegate
                                     {
-                                        _statusLabel.Text = $"Zařízení nalezeno a připojeno na {newDeviceIp}. Konfigurace načtena.";
+                                        _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFound"), newDeviceIp);
                                         _statusLabel.ForeColor = Color.Green;
                                     });
                                 }
@@ -153,7 +241,7 @@ namespace DeviceConfigurator
                                     DebugLogger.Log($"PerformHostnameScanAsync: Chyba při načítání konfigurace: {ex.Message}");
                                     this.Invoke((MethodInvoker)delegate
                                     {
-                                        _statusLabel.Text = $"Zařízení nalezeno na {newDeviceIp}, ale konfigurace se nepodařilo načíst: {ex.Message}";
+                                        _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFoundError"), newDeviceIp, ex.Message);
                                         _statusLabel.ForeColor = Color.Orange;
                                     });
                                 }
@@ -167,7 +255,7 @@ namespace DeviceConfigurator
                 DebugLogger.Log($"PerformHostnameScanAsync: Výjimka: {ex.GetType().Name}: {ex.Message}");
                 _scanProgressBar.Style = ProgressBarStyle.Continuous;
                 _scanProgressBar.Visible = false;
-                _statusLabel.Text = $"Chyba při skenování: {ex.Message}";
+                _statusLabel.Text = string.Format(Localization.GetString("StatusScanError"), ex.Message);
                 _statusLabel.ForeColor = Color.Red;
             }
             finally
@@ -197,7 +285,7 @@ namespace DeviceConfigurator
             // Počáteční čekání na restart zařízení
             this.Invoke((MethodInvoker)delegate
             {
-                _statusLabel.Text = $"IP adresa změněna na {expectedNewIp}. Čekám na restart zařízení...";
+                _statusLabel.Text = string.Format(Localization.GetString("StatusIpChanged"), expectedNewIp);
                 _statusLabel.ForeColor = Color.Blue;
                 _scanProgressBar.Visible = true;
                 _scanProgressBar.Style = ProgressBarStyle.Continuous;
@@ -234,7 +322,7 @@ namespace DeviceConfigurator
                     
                     this.Invoke((MethodInvoker)delegate
                     {
-                        _statusLabel.Text = $"Pinguji IP {expectedNewIp}... (pokus {pingAttemptNumber}, zbývá {remaining:F0}s)";
+                        _statusLabel.Text = string.Format(Localization.GetString("StatusPinging"), expectedNewIp, pingAttemptNumber, remaining.ToString("F0"));
                         _statusLabel.ForeColor = Color.Blue;
                         _scanProgressBar.Value = pingProgress;
                     });
@@ -252,7 +340,7 @@ namespace DeviceConfigurator
                                 
                                 this.Invoke((MethodInvoker)delegate
                                 {
-                                    _statusLabel.Text = $"IP {expectedNewIp} je dostupná. Připojuji se...";
+                                    _statusLabel.Text = string.Format(Localization.GetString("StatusIpReachable"), expectedNewIp);
                                     _statusLabel.ForeColor = Color.Blue;
                                     _scanProgressBar.Value = 90; // 90% - IP je dostupná, připojujeme se
                                 });
@@ -346,7 +434,7 @@ namespace DeviceConfigurator
                             await LoadDeviceConfigAsync();
                             this.Invoke((MethodInvoker)delegate
                             {
-                                _statusLabel.Text = $"Zařízení nalezeno a připojeno na {expectedNewIp}. Konfigurace načtena.";
+                                _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFound"), expectedNewIp);
                                 _statusLabel.ForeColor = Color.Green;
                                 _scanProgressBar.Value = 100;
                                 _scanProgressBar.Visible = false;
@@ -357,7 +445,7 @@ namespace DeviceConfigurator
                             DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Chyba při načítání konfigurace: {ex.Message}");
                             this.Invoke((MethodInvoker)delegate
                             {
-                                _statusLabel.Text = $"Zařízení nalezeno na {expectedNewIp}, ale konfigurace se nepodařilo načíst.";
+                                _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFoundError"), expectedNewIp, ex.Message);
                                 _statusLabel.ForeColor = Color.Orange;
                                 _scanProgressBar.Value = 100;
                                 _scanProgressBar.Visible = false;
@@ -372,7 +460,7 @@ namespace DeviceConfigurator
                         
                         this.Invoke((MethodInvoker)delegate
                         {
-                            _statusLabel.Text = $"Připojení selhalo. Skenuji síť podle hostname...";
+                            _statusLabel.Text = Localization.GetString("StatusConnectionFailed");
                             _scanProgressBar.Value = 95; // 95% - skenujeme síť
                         });
                         
@@ -416,7 +504,7 @@ namespace DeviceConfigurator
                                                 await LoadDeviceConfigAsync();
                                                 this.Invoke((MethodInvoker)delegate
                                                 {
-                                                    _statusLabel.Text = $"Zařízení nalezeno a připojeno na {foundDevice.IPAddress}. Konfigurace načtena.";
+                                                    _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFound"), foundDevice.IPAddress);
                                                     _statusLabel.ForeColor = Color.Green;
                                                     _scanProgressBar.Visible = false;
                                                 });
@@ -426,7 +514,7 @@ namespace DeviceConfigurator
                                                 DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Chyba při načítání konfigurace: {ex.Message}");
                                                 this.Invoke((MethodInvoker)delegate
                                                 {
-                                                    _statusLabel.Text = $"Zařízení nalezeno na {foundDevice.IPAddress}, ale konfigurace se nepodařilo načíst.";
+                                                    _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFoundError"), foundDevice.IPAddress, ex.Message);
                                                     _statusLabel.ForeColor = Color.Orange;
                                                     _scanProgressBar.Visible = false;
                                                 });
@@ -454,7 +542,7 @@ namespace DeviceConfigurator
                     DebugLogger.Log($"FindDeviceAfterIpChangeAsync: IP {expectedNewIp} nebyla dostupná během 60 sekund");
                     this.Invoke((MethodInvoker)delegate
                     {
-                        _statusLabel.Text = $"IP {expectedNewIp} nebyla dostupná během 60 sekund. Zkuste manuální skenování.";
+                        _statusLabel.Text = string.Format(Localization.GetString("StatusIpNotReachable"), expectedNewIp);
                         _statusLabel.ForeColor = Color.Orange;
                         _scanProgressBar.Value = 100;
                         _scanProgressBar.Visible = false;
@@ -465,7 +553,7 @@ namespace DeviceConfigurator
                     DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Zařízení nebylo nalezeno během 60 sekund");
                     this.Invoke((MethodInvoker)delegate
                     {
-                        _statusLabel.Text = $"Zařízení nebylo nalezeno během 60 sekund. Zkuste manuální skenování.";
+                        _statusLabel.Text = Localization.GetString("StatusDeviceNotFound");
                         _statusLabel.ForeColor = Color.Orange;
                         _scanProgressBar.Value = 100;
                         _scanProgressBar.Visible = false;
@@ -489,13 +577,13 @@ namespace DeviceConfigurator
             
             if (string.IsNullOrWhiteSpace(ipRange))
             {
-                _statusLabel.Text = "Zadejte IP rozsah (např. 192.168.0.1-255)";
+                _statusLabel.Text = Localization.GetString("StatusEnterIpRange");
                 return;
             }
 
             _scanButton.Enabled = false;
             _scanRangeButton.Enabled = false;
-            _statusLabel.Text = $"Skenování IP rozsahu {ipRange}...";
+            _statusLabel.Text = string.Format(Localization.GetString("StatusScanningRange"), ipRange);
             _devicesListBox.Items.Clear();
             _selectedDevice = null;
             _currentConfig = null;
@@ -519,15 +607,13 @@ namespace DeviceConfigurator
                         _devicesListBox.Items.Add(device);
                     }
                     
-                    int okCount = devices.Count(d => d.Status == "OK");
-                    int errorCount = devices.Count(d => d.Status == "ERROR");
-                    _statusLabel.Text = $"Skenování dokončeno: {okCount} OK, {errorCount} ERROR (celkem {devices.Count} zařízení).";
+                    _statusLabel.Text = string.Format(Localization.GetString("StatusDevicesFound"), devices.Count);
                 }
             }
             catch (Exception ex)
             {
                 DebugLogger.Log($"ScanRangeButton_Click: Výjimka: {ex.GetType().Name}: {ex.Message}");
-                _statusLabel.Text = $"Chyba při skenování IP rozsahu: {ex.Message}";
+                _statusLabel.Text = string.Format(Localization.GetString("StatusScanError"), ex.Message);
             }
             finally
             {
@@ -546,7 +632,7 @@ namespace DeviceConfigurator
                 // Pokud je status ERROR, nezkoušíme načítat konfiguraci
                 if (device.Status == "ERROR")
                 {
-                    _statusLabel.Text = $"Zařízení {device.IPAddress} není dostupné (ERROR).";
+                    _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceNotAvailable"), device.IPAddress);
                     _currentConfig = null;
                     UpdateConfigDisplay();
                     _refreshButton.Enabled = false;
@@ -567,7 +653,7 @@ namespace DeviceConfigurator
 
             DebugLogger.Log($"LoadDeviceConfigAsync: Začátek pro {_selectedDevice.IPAddress}");
             _refreshButton.Enabled = false;
-            _statusLabel.Text = $"Načítání konfigurace z {_selectedDevice.IPAddress}...";
+            _statusLabel.Text = string.Format(Localization.GetString("StatusLoading"), _selectedDevice.IPAddress);
             _statusLabel.ForeColor = Color.Blue;
             _scanProgressBar.Visible = true;
             _scanProgressBar.Style = ProgressBarStyle.Marquee; // Animovaný progress bar pro načítání
@@ -659,7 +745,7 @@ namespace DeviceConfigurator
                     _saveButton.Enabled = true;
                     _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
                     _scanProgressBar.Visible = false;
-                    _statusLabel.Text = "Konfigurace načtena úspěšně.";
+                    _statusLabel.Text = Localization.GetString("StatusConfigLoaded");
                     _statusLabel.ForeColor = Color.Green;
                 }
                 else
@@ -785,19 +871,19 @@ namespace DeviceConfigurator
             
             if (_sshStatusLabel.Tag is Label sshValueLabel)
             {
-                sshValueLabel.Text = _currentConfig.SshEnabled ? "Povoleno" : "Zakázáno";
+                sshValueLabel.Text = _currentConfig.SshEnabled ? Localization.GetString("SshEnabled") : Localization.GetString("SshDisabled");
                 sshValueLabel.ForeColor = _currentConfig.SshEnabled ? Color.Green : Color.Red;
             }
             
             if (_rootLoginLabel.Tag is Label rootLoginValueLabel)
             {
-                rootLoginValueLabel.Text = _currentConfig.RootLoginEnabled ? "Povoleno" : "Zakázáno";
+                rootLoginValueLabel.Text = _currentConfig.RootLoginEnabled ? Localization.GetString("SshEnabled") : Localization.GetString("SshDisabled");
                 rootLoginValueLabel.ForeColor = _currentConfig.RootLoginEnabled ? Color.Green : Color.Red;
             }
             
             if (_rootPasswordLabel.Tag is Label rootPasswordValueLabel)
             {
-                rootPasswordValueLabel.Text = _currentConfig.RootPasswordSet ? "Nastaveno" : "Nenastaveno";
+                rootPasswordValueLabel.Text = _currentConfig.RootPasswordSet ? Localization.GetString("RootPasswordSet") : Localization.GetString("RootPasswordNotSet");
                 rootPasswordValueLabel.ForeColor = _currentConfig.RootPasswordSet ? Color.Green : Color.Orange;
             }
 
@@ -822,7 +908,7 @@ namespace DeviceConfigurator
 
             DebugLogger.Log($"SaveButton_Click: Ukládání změn pro {_selectedDevice.IPAddress}");
             _saveButton.Enabled = false;
-            _statusLabel.Text = "Ukládání změn...";
+            _statusLabel.Text = Localization.GetString("StatusSaving");
 
             try
             {
@@ -964,7 +1050,7 @@ namespace DeviceConfigurator
                     }
                     else
                     {
-                        _statusLabel.Text = "Změny byly úspěšně uloženy. Načítám aktualizovanou konfiguraci...";
+                        _statusLabel.Text = Localization.GetString("StatusSaved");
                         // Obnovení konfigurace pokud se IP nezměnila
                         await LoadDeviceConfigAsync();
                     }
@@ -1477,7 +1563,7 @@ namespace DeviceConfigurator
         {
             if (_currentConfig == null)
             {
-                MessageBox.Show("Nejprve načtěte konfiguraci ze zařízení.", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(Localization.GetString("MessageLoadConfigFirst"), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1518,12 +1604,12 @@ namespace DeviceConfigurator
                         string json = System.Text.Json.JsonSerializer.Serialize(configToSave, options);
                         System.IO.File.WriteAllText(saveDialog.FileName, json, System.Text.Encoding.UTF8);
 
-                        MessageBox.Show($"Konfigurace byla úspěšně uložena do:\n{saveDialog.FileName}", "Úspěch", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show(string.Format(Localization.GetString("MessageConfigSaved"), saveDialog.FileName), Localization.GetString("MessageTitleSuccess"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                         DebugLogger.Log($"DownloadConfigMenuItem_Click: Konfigurace uložena do {saveDialog.FileName}");
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Chyba při ukládání konfigurace:\n{ex.Message}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(string.Format(Localization.GetString("MessageConfigSaveError"), ex.Message), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                         DebugLogger.Log($"DownloadConfigMenuItem_Click: Chyba při ukládání: {ex.Message}");
                     }
                 }
@@ -1537,7 +1623,7 @@ namespace DeviceConfigurator
         {
             if (_selectedDevice == null)
             {
-                MessageBox.Show("Nejprve vyberte zařízení ze seznamu.", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(Localization.GetString("MessageSelectDevice"), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1667,24 +1753,24 @@ namespace DeviceConfigurator
                                     await LoadDeviceConfigAsync();
                                 }
                                 
-                                MessageBox.Show("Konfigurace byla úspěšně nahrána a aplikována na zařízení.", "Úspěch", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                MessageBox.Show(Localization.GetString("MessageConfigUploaded"), Localization.GetString("MessageTitleSuccess"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                             }
                             else
                             {
-                                _statusLabel.Text = $"Chyba při nahrávání konfigurace: {errorMessage}";
+                                _statusLabel.Text = string.Format(Localization.GetString("MessageConfigUploadError"), errorMessage);
                                 _statusLabel.ForeColor = Color.Red;
-                                MessageBox.Show($"Chyba při nahrávání konfigurace:\n{errorMessage}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                MessageBox.Show(string.Format(Localization.GetString("MessageConfigUploadError"), errorMessage), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
                         }
                     }
                     catch (System.Text.Json.JsonException ex)
                     {
-                        MessageBox.Show($"Chyba při parsování JSON souboru:\n{ex.Message}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(string.Format(Localization.GetString("MessageJsonParseError"), ex.Message), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                         DebugLogger.Log($"UploadConfigMenuItem_Click: Chyba parsování JSON: {ex.Message}");
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Chyba při nahrávání konfigurace:\n{ex.Message}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(string.Format(Localization.GetString("MessageConfigUploadError"), ex.Message), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                         DebugLogger.Log($"UploadConfigMenuItem_Click: Chyba: {ex.Message}");
                     }
                 }

@@ -65,6 +65,9 @@ namespace DeviceConfigurator
         private ToolStripMenuItem _configMenu;
         private ToolStripMenuItem _downloadConfigMenuItem;
         private ToolStripMenuItem _uploadConfigMenuItem;
+        private ToolStripMenuItem _languageMenu;
+        private ToolStripMenuItem _languageCzechMenuItem;
+        private ToolStripMenuItem _languageEnglishMenuItem;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -122,6 +125,25 @@ namespace DeviceConfigurator
             _configMenu.DropDownItems.Add(_downloadConfigMenuItem);
             _configMenu.DropDownItems.Add(_uploadConfigMenuItem);
             _mainMenuStrip.Items.Add(_configMenu);
+            
+            // Language menu
+            _languageMenu = new ToolStripMenuItem();
+            _languageMenu.Text = "Jazyk"; // Bude aktualizováno v UpdateLanguageUI
+            _languageMenu.Size = new Size(60, 20);
+            
+            // Czech
+            _languageCzechMenuItem = new ToolStripMenuItem();
+            _languageCzechMenuItem.Text = "Čeština"; // Bude aktualizováno v UpdateLanguageUI
+            _languageCzechMenuItem.Size = new Size(150, 22);
+            
+            // English
+            _languageEnglishMenuItem = new ToolStripMenuItem();
+            _languageEnglishMenuItem.Text = "English"; // Bude aktualizováno v UpdateLanguageUI
+            _languageEnglishMenuItem.Size = new Size(150, 22);
+            
+            _languageMenu.DropDownItems.Add(_languageCzechMenuItem);
+            _languageMenu.DropDownItems.Add(_languageEnglishMenuItem);
+            _mainMenuStrip.Items.Add(_languageMenu);
             
             this.MainMenuStrip = _mainMenuStrip;
             

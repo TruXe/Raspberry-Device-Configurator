@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <!-- Czech (default) -->
+  <data name="FormTitle" xml:space="preserve">
+    <value>Device Configurator - Raspberry Pi</value>
+  </data>
+  <data name="MenuConfig" xml:space="preserve">
+    <value>Config</value>
+  </data>
+  <data name="MenuDownloadConfig" xml:space="preserve">
+    <value>Stáhnout konfiguraci</value>
+  </data>
+  <data name="MenuUploadConfig" xml:space="preserve">
+    <value>Nahrát konfiguraci</value>
+  </data>
+  <data name="MenuLanguage" xml:space="preserve">
+    <value>Jazyk</value>
+  </data>
+  <data name="MenuLanguageCzech" xml:space="preserve">
+    <value>Čeština</value>
+  </data>
+  <data name="MenuLanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="DevicesGroupBox" xml:space="preserve">
+    <value>Nalezená zařízení</value>
+  </data>
+  <data name="DevicesLabel" xml:space="preserve">
+    <value>Vyberte zařízení ze seznamu:</value>
+  </data>
+  <data name="ScanGroupBox" xml:space="preserve">
+    <value>Skenování sítě</value>
+  </data>
+  <data name="IpRangeLabel" xml:space="preserve">
+    <value>IP rozsah:</value>
+  </data>
+  <data name="ScanRangeButton" xml:space="preserve">
+    <value>Skenovat rozsah</value>
+  </data>
+  <data name="ScanButton" xml:space="preserve">
+    <value>Skenovat podle hostname</value>
+  </data>
+  <data name="RefreshButton" xml:space="preserve">
+    <value>Obnovit konfiguraci</value>
+  </data>
+  <data name="DebugConsoleButton" xml:space="preserve">
+    <value>Debug Console</value>
+  </data>
+  <data name="ConfigGroupBox" xml:space="preserve">
+    <value>Aktuální konfigurace</value>
+  </data>
+  <data name="IpLabel" xml:space="preserve">
+    <value>IP adresa:</value>
+  </data>
+  <data name="HostnameLabel" xml:space="preserve">
+    <value>Hostname:</value>
+  </data>
+  <data name="PortLabel" xml:space="preserve">
+    <value>Port:</value>
+  </data>
+  <data name="SshLabel" xml:space="preserve">
+    <value>SSH:</value>
+  </data>
+  <data name="RootLoginLabel" xml:space="preserve">
+    <value>Root login:</value>
+  </data>
+  <data name="RootPasswordLabel" xml:space="preserve">
+    <value>Root heslo:</value>
+  </data>
+  <data name="EditGroupBox" xml:space="preserve">
+    <value>Úprava konfigurace</value>
+  </data>
+  <data name="NewHostnameLabel" xml:space="preserve">
+    <value>Nový hostname:</value>
+  </data>
+  <data name="UsernameLabel" xml:space="preserve">
+    <value>Uživatelské jméno:</value>
+  </data>
+  <data name="PasswordLabel" xml:space="preserve">
+    <value>Heslo uživatele:</value>
+  </data>
+  <data name="RootPasswordEditLabel" xml:space="preserve">
+    <value>Root heslo:</value>
+  </data>
+  <data name="StaticIpLabel" xml:space="preserve">
+    <value>Statická IPv4 adresa:</value>
+  </data>
+  <data name="NetmaskLabel" xml:space="preserve">
+    <value>Maska sítě:</value>
+  </data>
+  <data name="GatewayLabel" xml:space="preserve">
+    <value>Brána (Gateway):</value>
+  </data>
+  <data name="SshEnabledCheckBox" xml:space="preserve">
+    <value>Povolit SSH</value>
+  </data>
+  <data name="RootLoginCheckBox" xml:space="preserve">
+    <value>Povolit SSH root login</value>
+  </data>
+  <data name="SaveButton" xml:space="preserve">
+    <value>Uložit změny</value>
+  </data>
+  <data name="StatusReady" xml:space="preserve">
+    <value>Připraveno. Zadejte IP rozsah nebo klikněte na 'Skenovat síť' pro začátek.</value>
+  </data>
+  <data name="StatusScanning" xml:space="preserve">
+    <value>Skenování sítě podle hostname...</value>
+  </data>
+  <data name="StatusNoDevices" xml:space="preserve">
+    <value>Nebyla nalezena žádná zařízení. Zkuste znovu nebo použijte skenování IP rozsahu.</value>
+  </data>
+  <data name="StatusDevicesFound" xml:space="preserve">
+    <value>Nalezeno {0} zařízení.</value>
+  </data>
+  <data name="StatusLoading" xml:space="preserve">
+    <value>Načítání konfigurace z {0}...</value>
+  </data>
+  <data name="StatusConfigLoaded" xml:space="preserve">
+    <value>Konfigurace načtena úspěšně.</value>
+  </data>
+  <data name="StatusSaving" xml:space="preserve">
+    <value>Ukládání změn...</value>
+  </data>
+  <data name="StatusSaved" xml:space="preserve">
+    <value>Změny byly úspěšně uloženy. Načítám aktualizovanou konfiguraci...</value>
+  </data>
+  <data name="StatusError" xml:space="preserve">
+    <value>Chyba: {0}</value>
+  </data>
+  <data name="SshEnabled" xml:space="preserve">
+    <value>Povoleno</value>
+  </data>
+  <data name="SshDisabled" xml:space="preserve">
+    <value>Zakázáno</value>
+  </data>
+  <data name="RootPasswordSet" xml:space="preserve">
+    <value>Nastaveno</value>
+  </data>
+  <data name="RootPasswordNotSet" xml:space="preserve">
+    <value>Nenastaveno</value>
+  </data>
+  <data name="StatusDeviceFound" xml:space="preserve">
+    <value>Zařízení nalezeno a připojeno na {0}. Konfigurace načtena.</value>
+  </data>
+  <data name="StatusDeviceFoundError" xml:space="preserve">
+    <value>Zařízení nalezeno na {0}, ale konfigurace se nepodařilo načíst: {1}</value>
+  </data>
+  <data name="StatusIpChanged" xml:space="preserve">
+    <value>IP adresa změněna na {0}. Čekám na restart zařízení...</value>
+  </data>
+  <data name="StatusPinging" xml:space="preserve">
+    <value>Pinguji IP {0}... (pokus {1}, zbývá {2}s)</value>
+  </data>
+  <data name="StatusIpReachable" xml:space="preserve">
+    <value>IP {0} je dostupná. Připojuji se...</value>
+  </data>
+  <data name="StatusConnectionFailed" xml:space="preserve">
+    <value>Připojení selhalo. Skenuji síť podle hostname...</value>
+  </data>
+  <data name="StatusIpNotReachable" xml:space="preserve">
+    <value>IP {0} nebyla dostupná během 60 sekund. Zkuste manuální skenování.</value>
+  </data>
+  <data name="StatusDeviceNotFound" xml:space="preserve">
+    <value>Zařízení nebylo nalezeno během 60 sekund. Zkuste manuální skenování.</value>
+  </data>
+  <data name="StatusEnterIpRange" xml:space="preserve">
+    <value>Zadejte IP rozsah (např. 192.168.0.1-255)</value>
+  </data>
+  <data name="StatusScanningRange" xml:space="preserve">
+    <value>Skenování IP rozsahu {0}...</value>
+  </data>
+  <data name="StatusScanError" xml:space="preserve">
+    <value>Chyba při skenování: {0}</value>
+  </data>
+  <data name="StatusDeviceNotAvailable" xml:space="preserve">
+    <value>Zařízení {0} není dostupné (ERROR).</value>
+  </data>
+  <data name="MessageLoadConfigFirst" xml:space="preserve">
+    <value>Nejprve načtěte konfiguraci ze zařízení.</value>
+  </data>
+  <data name="MessageConfigSaved" xml:space="preserve">
+    <value>Konfigurace byla úspěšně uložena do:\n{0}</value>
+  </data>
+  <data name="MessageConfigSaveError" xml:space="preserve">
+    <value>Chyba při ukládání konfigurace:\n{0}</value>
+  </data>
+  <data name="MessageConfigUploaded" xml:space="preserve">
+    <value>Konfigurace byla úspěšně nahrána a aplikována na zařízení.</value>
+  </data>
+  <data name="MessageConfigUploadError" xml:space="preserve">
+    <value>Chyba při nahrávání konfigurace:\n{0}</value>
+  </data>
+  <data name="MessageSelectDevice" xml:space="preserve">
+    <value>Nejprve vyberte zařízení ze seznamu.</value>
+  </data>
+  <data name="MessageJsonParseError" xml:space="preserve">
+    <value>Chyba při parsování JSON souboru:\n{0}</value>
+  </data>
+  <data name="MessageTitleError" xml:space="preserve">
+    <value>Chyba</value>
+  </data>
+  <data name="MessageTitleSuccess" xml:space="preserve">
+    <value>Úspěch</value>
+  </data>
+  <data name="MessageTitleWarning" xml:space="preserve">
+    <value>Varování</value>
+  </data>
+</root>
+
