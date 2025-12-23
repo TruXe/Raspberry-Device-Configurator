@@ -1,0 +1,159 @@
+================================================================================
+DEVICE CONFIGURATOR - RASPBERRY PI REMOTE CONFIGURATION
+Application Overview & Quick Reference
+================================================================================
+
+WHAT IS THIS APPLICATION?
+-------------------------
+A Windows-based GUI application for remotely configuring and managing Raspberry Pi 
+devices in a local network. The application consists of:
+- Client: C# WinForms application (.NET 6+) running on Windows
+- Server: Python 3 server running on Raspberry Pi devices
+
+COMMUNICATION
+-------------
+- Protocol: TCP on port 7777
+- Format: JSON over TCP
+- Authentication: Token-based
+- Timeout: 60 seconds
+
+MAIN FEATURES
+-------------
+
+1. NETWORK DISCOVERY
+   - Hostname-based scanning (rasp, local, master, or custom hostname)
+   - IP range scanning (e.g., 192.168.0.1-255)
+   - Real-time status indicators in TreeView:
+     * Green dot: Device online (ping OK, port 7777 responding)
+     * Orange dot: Device reachable (ping OK, but port 7777 not responding)
+     * Red dot: Device offline (ping failed)
+
+2. DEVICE CONFIGURATION
+   - Static IPv4 address, netmask, gateway
+   - Hostname change
+   - SSH enable/disable, root login configuration
+   - User password and root password management
+   - Automatic IP change tracking (auto-detects new IP after static IP change)
+
+3. SERVER MANAGEMENT
+   - Manage list of Raspberry Pi servers
+   - Automatic status check every 15 seconds
+   - Persistent storage in C:\RDC\data\configuration\servers.json
+   - Add, edit, remove servers with custom names, IPs, hostnames, ports
+
+4. USER INTERFACE
+   - Multi-language support: Czech and English (default: English)
+   - Modern, organized layout with docked progress bar
+   - Debug console for real-time logging
+   - Configuration import/export (JSON files)
+
+5. APPLICATION SETTINGS
+   - Persistent configuration in C:\RDC\data\configuration\
+   - Language preference saved
+   - Server list persists across restarts
+
+HOW IT WORKS
+------------
+
+CLIENT SIDE (Windows):
+1. User scans network for devices (by hostname or IP range)
+2. Devices appear in TreeView with status indicators
+3. User selects device and configuration is loaded
+4. User edits configuration (IP, hostname, passwords, SSH settings)
+5. User saves changes
+6. If static IP changed, client automatically tracks IP change
+7. Client connects to new IP and loads updated configuration
+
+SERVER SIDE (Raspberry Pi):
+1. Python server listens on TCP port 7777
+2. Receives JSON commands from client
+3. Validates authentication token
+4. Executes system commands (hostname, password, SSH, network config)
+5. Returns JSON response with status and data
+6. Supports dhcpcd and NetworkManager for network configuration
+
+AUTOMATIC FEATURES
+-----------------
+- Automatic device status checking (every 15 seconds for server list)
+- Automatic IP change tracking (after static IP modification)
+- Automatic configuration reload after IP change
+- Automatic status updates in TreeView (ping + port 7777 check)
+
+SUPPORTED OPERATIONS
+--------------------
+- get_config: Get current device configuration
+- set_hostname: Change device hostname
+- set_user_password: Set password for a user
+- set_root_password: Set root password
+- set_ssh_enabled: Enable/disable SSH
+- set_root_login: Enable/disable SSH root login
+- set_static_ip: Configure static IPv4 address
+
+INSTALLATION
+------------
+
+SERVER (Raspberry Pi):
+1. cd server
+2. sudo ./install.sh
+   OR manually:
+   - Copy raspberry_config_server.py to /opt/raspberry-config-server/
+   - Install systemd service
+   - Start service: sudo systemctl start raspberry-config-server
+
+CLIENT (Windows):
+1. cd client
+2. dotnet build
+3. dotnet run
+   OR open in Visual Studio and run
+
+CONFIGURATION FILES
+-------------------
+Client:
+- C:\RDC\data\configuration\settings.json (language, preferences)
+- C:\RDC\data\configuration\servers.json (server list)
+
+Server:
+- /opt/raspberry-config-server/raspberry_config_server.py
+- /etc/systemd/system/raspberry-config-server.service
+- /var/log/raspberry_config_server.log
+
+SECURITY NOTES
+--------------
+- Default auth token is for testing only - CHANGE IT!
+- Passwords transmitted in plaintext (use in trusted networks only)
+- Server listens on all interfaces (0.0.0.0)
+- SSH root login is a security risk
+- Consider firewall rules for production use
+
+TROUBLESHOOTING
+---------------
+- Server not starting: Check logs with journalctl
+- Client can't find devices: Check firewall, network, use IP range scan
+- Configuration not loading: Open Debug Console, check network connectivity
+- Status not updating: Wait 15 seconds or click Refresh button
+
+DEBUG TOOLS
+-----------
+- Debug Console: Click "Debug Console" button in main window
+- Server logs: sudo journalctl -u raspberry-config-server -f
+- Enable debug: Set DEBUG = True in raspberry_config_server.py
+
+LANGUAGES
+---------
+- English (default)
+- Czech (Čeština)
+- Language preference saved in settings.json
+
+TECHNICAL DETAILS
+------------------
+- Client: C# .NET 6+ WinForms
+- Server: Python 3.6+
+- Communication: TCP/JSON
+- Network managers supported: dhcpcd, NetworkManager
+- Status check interval: 15 seconds
+- IP change tracking timeout: 5 minutes (60 attempts, 5s intervals)
+
+================================================================================
+For detailed documentation, see README.md
+================================================================================
+

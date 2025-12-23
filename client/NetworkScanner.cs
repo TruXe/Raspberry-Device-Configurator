@@ -19,15 +19,27 @@ namespace DeviceConfigurator
         /// <summary>
         /// Skenuje lokální síť a hledá zařízení podle hostname.
         /// </summary>
-        public async Task<List<NetworkDevice>> ScanNetworkAsync()
+        /// <param name="customHostname">Volitelný vlastní hostname pro skenování. Pokud je prázdný, použijí se výchozí hostname.</param>
+        public async Task<List<NetworkDevice>> ScanNetworkAsync(string? customHostname = null)
         {
-            DebugLogger.Log("ScanNetworkAsync: Začátek skenování podle hostname");
+            DebugLogger.Log($"ScanNetworkAsync: Začátek skenování podle hostname (custom: {customHostname ?? "none"})");
             var devices = new List<NetworkDevice>();
             var foundIps = new HashSet<string>(); // Abychom neopakovali stejné IP
 
+            // Určení, které hostname použít
+            var hostnamesToScan = new List<string>();
+            if (!string.IsNullOrWhiteSpace(customHostname))
+            {
+                hostnamesToScan.Add(customHostname.Trim());
+            }
+            else
+            {
+                hostnamesToScan.AddRange(_targetHostnames);
+            }
+
             // 1. Nejdříve zkusíme přímý DNS lookup pro každý target hostname
-            DebugLogger.Log("ScanNetworkAsync: Zkouším přímý DNS lookup pro target hostnames");
-            foreach (var targetHostname in _targetHostnames)
+            DebugLogger.Log($"ScanNetworkAsync: Zkouším přímý DNS lookup pro {hostnamesToScan.Count} hostname(s)");
+            foreach (var targetHostname in hostnamesToScan)
             {
                 try
                 {
@@ -137,7 +149,7 @@ namespace DeviceConfigurator
                         string ip = $"{localNetwork.BaseIP}.{i}";
                         if (!foundIps.Contains(ip))
                         {
-                            tasks.Add(CheckDeviceAsync(ip));
+                            tasks.Add(CheckDeviceAsync(ip, hostnamesToScan));
                         }
                     }
 
@@ -162,7 +174,7 @@ namespace DeviceConfigurator
         /// <summary>
         /// Zkontroluje, zda zařízení na dané IP adrese odpovídá hledaným hostname.
         /// </summary>
-        private async Task<NetworkDevice?> CheckDeviceAsync(string ipAddress)
+        private async Task<NetworkDevice?> CheckDeviceAsync(string ipAddress, List<string>? hostnamesToScan = null)
         {
             try
             {
@@ -191,8 +203,11 @@ namespace DeviceConfigurator
                     DebugLogger.Log($"CheckDeviceAsync: {ipAddress} - reverse DNS: {hostname}");
                     
                     // 3. Kontrola, zda hostname odpovídá hledaným hodnotám (přesná shoda nebo obsahuje)
+                    // Pokud je zadán custom hostname, použijeme ho, jinak použijeme výchozí seznam
                     string hostnameLower = hostname.ToLower();
-                    foreach (var target in _targetHostnames)
+                    var targetsToCheck = hostnamesToScan ?? _targetHostnames.ToList();
+                    
+                    foreach (var target in targetsToCheck)
                     {
                         string targetLower = target.ToLower();
                         // Přesná shoda nebo hostname začíná targetem (např. "raspberry" obsahuje "rasp")
@@ -224,7 +239,7 @@ namespace DeviceConfigurator
                     return new NetworkDevice
                     {
                         IPAddress = ipAddress,
-                        Hostname = hostname ?? "Neznámý",
+                        Hostname = hostname ?? Localization.GetString("UnknownHostname"),
                         Status = "OK"
                     };
                 }
@@ -453,7 +468,7 @@ namespace DeviceConfigurator
                 return new NetworkDevice
                 {
                     IPAddress = ipAddress,
-                    Hostname = hostname ?? "Neznámý",
+                    Hostname = hostname ?? Localization.GetString("UnknownHostname"),
                     Status = isReachable ? "OK" : "ERROR"
                 };
             }

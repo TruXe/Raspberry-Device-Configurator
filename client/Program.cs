@@ -11,6 +11,9 @@ namespace DeviceConfigurator
         [STAThread]
         static void Main()
         {
+            // Načteme nastavení jazyka před vytvořením formuláře
+            Localization.LoadLanguage();
+            
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());

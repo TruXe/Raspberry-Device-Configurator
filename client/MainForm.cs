@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Net.NetworkInformation;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Text.Json;
 
 namespace DeviceConfigurator
 {
@@ -18,555 +19,72 @@ namespace DeviceConfigurator
         private NetworkDevice? _selectedDevice;
         private DeviceConfig? _currentConfig;
         private System.Threading.CancellationTokenSource? _ipPollingCancellation;
+        private System.Threading.CancellationTokenSource? _statusCheckCancellation;
+        private Dictionary<string, TreeNode> _deviceNodes = new Dictionary<string, TreeNode>();
 
         public MainForm()
         {
-            // Načteme uložený jazyk před inicializací komponent
-            var savedLanguage = Localization.LoadLanguage();
-            Localization.SetLanguage(savedLanguage);
-            
             InitializeComponent();
             _scanner = new NetworkScanner();
             _client = new ConfigClient();
             
+            // Načteme nastavení jazyka a aktualizujeme UI
+            Localization.LoadLanguage();
+            UpdateLanguageUI();
+            UpdateLanguageMenuCheckmarks();
+            
             // Zobrazit debug konzoli při startu (volitelné)
             // DebugLogger.ShowConsole();
-            
-            // Připojení event handlerů pro menu
-            _downloadConfigMenuItem.Click += DownloadConfigMenuItem_Click;
-            _uploadConfigMenuItem.Click += UploadConfigMenuItem_Click;
-            _languageCzechMenuItem.Click += LanguageCzechMenuItem_Click;
-            _languageEnglishMenuItem.Click += LanguageEnglishMenuItem_Click;
-            
-            // Aktualizujeme UI podle zvoleného jazyka
-            UpdateLanguageUI();
-            
-            // ZAKOMENTOVÁNO: Automatické načtení konfigurace při startu
-            // Uživatel musí manuálně kliknout na skenování
-            // LoadSavedConfigOnStartup();
-        }
-        
-        /// <summary>
-        /// Aktualizuje UI podle aktuálního jazyka.
-        /// </summary>
-        private void UpdateLanguageUI()
-        {
-            // Formulář
-            this.Text = Localization.GetString("FormTitle");
-            
-            // Menu
-            _configMenu.Text = Localization.GetString("MenuConfig");
-            _downloadConfigMenuItem.Text = Localization.GetString("MenuDownloadConfig");
-            _uploadConfigMenuItem.Text = Localization.GetString("MenuUploadConfig");
-            _languageMenu.Text = Localization.GetString("MenuLanguage");
-            _languageCzechMenuItem.Text = Localization.GetString("MenuLanguageCzech");
-            _languageEnglishMenuItem.Text = Localization.GetString("MenuLanguageEnglish");
-            
-            // GroupBoxy
-            _devicesGroupBox.Text = Localization.GetString("DevicesGroupBox");
-            _devicesLabel.Text = Localization.GetString("DevicesLabel");
-            _scanGroupBox.Text = Localization.GetString("ScanGroupBox");
-            _ipRangeLabel.Text = Localization.GetString("IpRangeLabel");
-            _scanRangeButton.Text = Localization.GetString("ScanRangeButton");
-            _scanButton.Text = Localization.GetString("ScanButton");
-            _refreshButton.Text = Localization.GetString("RefreshButton");
-            _debugConsoleButton.Text = Localization.GetString("DebugConsoleButton");
-            _configGroupBox.Text = Localization.GetString("ConfigGroupBox");
-            _ipLabel.Text = Localization.GetString("IpLabel");
-            _hostnameLabel.Text = Localization.GetString("HostnameLabel");
-            _portLabel.Text = Localization.GetString("PortLabel");
-            _sshStatusLabel.Text = Localization.GetString("SshLabel");
-            _rootLoginLabel.Text = Localization.GetString("RootLoginLabel");
-            _rootPasswordLabel.Text = Localization.GetString("RootPasswordLabel");
-            _editGroupBox.Text = Localization.GetString("EditGroupBox");
-            _newHostnameLabel.Text = Localization.GetString("NewHostnameLabel");
-            _usernameLabel.Text = Localization.GetString("UsernameLabel");
-            _passwordLabel.Text = Localization.GetString("PasswordLabel");
-            _rootPasswordEditLabel.Text = Localization.GetString("RootPasswordEditLabel");
-            _staticIpLabel.Text = Localization.GetString("StaticIpLabel");
-            _netmaskLabel.Text = Localization.GetString("NetmaskLabel");
-            _gatewayLabel.Text = Localization.GetString("GatewayLabel");
-            _sshEnabledCheckBox.Text = Localization.GetString("SshEnabledCheckBox");
-            _rootLoginCheckBox.Text = Localization.GetString("RootLoginCheckBox");
-            _saveButton.Text = Localization.GetString("SaveButton");
-            
-            // Status
-            _statusLabel.Text = Localization.GetString("StatusReady");
-            
-            // Aktualizujeme označení jazyka v menu
-            UpdateLanguageMenuCheckmarks();
-        }
-        
-        /// <summary>
-        /// Aktualizuje zaškrtnutí u jazykových položek v menu.
-        /// </summary>
-        private void UpdateLanguageMenuCheckmarks()
-        {
-            var currentLang = Localization.GetCurrentLanguage();
-            _languageCzechMenuItem.Checked = (currentLang == Localization.Language.Czech);
-            _languageEnglishMenuItem.Checked = (currentLang == Localization.Language.English);
-        }
-        
-        /// <summary>
-        /// Handler pro výběr češtiny.
-        /// </summary>
-        private void LanguageCzechMenuItem_Click(object? sender, EventArgs e)
-        {
-            Localization.SetLanguage(Localization.Language.Czech);
-            UpdateLanguageUI();
-        }
-        
-        /// <summary>
-        /// Handler pro výběr angličtiny.
-        /// </summary>
-        private void LanguageEnglishMenuItem_Click(object? sender, EventArgs e)
-        {
-            Localization.SetLanguage(Localization.Language.English);
-            UpdateLanguageUI();
         }
 
         private async void ScanButton_Click(object? sender, EventArgs e)
         {
-            await PerformHostnameScanAsync();
-        }
-
-        /// <summary>
-        /// Provede skenování podle hostname s progress barem.
-        /// </summary>
-        private async Task PerformHostnameScanAsync(string targetHostname = null, string expectedNewIp = null)
-        {
-            DebugLogger.Log("PerformHostnameScanAsync: Začátek skenování podle hostname");
+            string hostname = _hostnameScanTextBox.Text.Trim();
+            DebugLogger.Log($"ScanButton_Click: Začátek skenování podle hostname: {hostname}");
             _scanButton.Enabled = false;
             _scanRangeButton.Enabled = false;
-            _statusLabel.Text = Localization.GetString("StatusScanning");
-            _statusLabel.ForeColor = Color.Blue;
-            _scanProgressBar.Visible = true;
-            _scanProgressBar.Value = 0;
-            _scanProgressBar.Style = ProgressBarStyle.Marquee; // Animovaný progress bar
-            _scanProgressBar.MarqueeAnimationSpeed = 30;
-            _devicesListBox.Items.Clear();
             
-            // Pokud není cílové hostname, vynulujeme vybrané zařízení
-            if (string.IsNullOrEmpty(targetHostname))
+            if (string.IsNullOrWhiteSpace(hostname))
             {
-                _selectedDevice = null;
-                _currentConfig = null;
-                UpdateConfigDisplay();
+                _statusLabel.Text = Localization.GetString("EnterHostname");
+                _scanButton.Enabled = true;
+                _scanRangeButton.Enabled = true;
+                return;
             }
-
-            var startTime = DateTime.Now;
+            
+            _statusLabel.Text = $"Skenování sítě podle hostname '{hostname}'...";
+            _devicesTreeView.Nodes.Clear();
+            _deviceNodes.Clear();
+            _selectedDevice = null;
+            _currentConfig = null;
+            UpdateConfigDisplay();
 
             try
             {
-                // Spustíme skenování
-                var devices = await _scanner.ScanNetworkAsync();
-                
-                var elapsed = (DateTime.Now - startTime).TotalSeconds;
-                DebugLogger.Log($"PerformHostnameScanAsync: Skenování dokončeno za {elapsed:F1}s, nalezeno {devices.Count} zařízení");
-
-                // Aktualizujeme UI s výsledky
-                _scanProgressBar.Style = ProgressBarStyle.Continuous;
-                _scanProgressBar.Value = 100;
-                _scanProgressBar.Visible = false;
+                var devices = await _scanner.ScanNetworkAsync(hostname);
 
                 if (devices.Count == 0)
                 {
-                    _statusLabel.Text = Localization.GetString("StatusNoDevices");
-                    _statusLabel.ForeColor = Color.Orange;
+                    _statusLabel.Text = "Nebyla nalezena žádná zařízení. Zkuste znovu nebo použijte skenování IP rozsahu.";
                 }
                 else
                 {
-                    // Seřazení podle statusu (OK první, pak ERROR)
-                    devices = devices.OrderByDescending(d => d.Status == "OK").ToList();
-                    
-                    foreach (var device in devices)
-                    {
-                        _devicesListBox.Items.Add(device);
-                    }
-                    _statusLabel.Text = string.Format(Localization.GetString("StatusDevicesFound"), devices.Count);
-                    _statusLabel.ForeColor = Color.Green;
-                    
-                    // Pokud máme cílové hostname nebo očekávanou novou IP, zkusíme najít zařízení
-                    NetworkDevice foundDevice = null;
-                    
-                    if (!string.IsNullOrEmpty(targetHostname))
-                    {
-                        // Hledáme podle hostname
-                        foundDevice = devices.FirstOrDefault(d => 
-                            d.Hostname.Equals(targetHostname, StringComparison.OrdinalIgnoreCase));
-                        
-                        if (foundDevice != null)
-                        {
-                            DebugLogger.Log($"PerformHostnameScanAsync: Nalezeno zařízení podle hostname: {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                        }
-                    }
-                    
-                    // Pokud máme očekávanou novou IP, zkusíme najít zařízení podle IP
-                    if (foundDevice == null && !string.IsNullOrEmpty(expectedNewIp))
-                    {
-                        foundDevice = devices.FirstOrDefault(d => d.IPAddress == expectedNewIp);
-                        
-                        if (foundDevice != null)
-                        {
-                            DebugLogger.Log($"PerformHostnameScanAsync: Nalezeno zařízení podle nové IP: {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                        }
-                    }
-                    
-                    // Pokud jsme našli zařízení, automaticky ho vybereme a načteme konfiguraci
-                    if (foundDevice != null)
-                    {
-                        int index = _devicesListBox.Items.IndexOf(foundDevice);
-                        if (index >= 0)
-                        {
-                            _devicesListBox.SelectedIndex = index;
-                            _selectedDevice = foundDevice;
-                            DebugLogger.Log($"PerformHostnameScanAsync: Automaticky vybráno zařízení {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                            
-                            // Automaticky načteme konfiguraci z nového zařízení
-                            string newDeviceIp = foundDevice.IPAddress;
-                            Task.Run(async () =>
-                            {
-                                try
-                                {
-                                    DebugLogger.Log($"PerformHostnameScanAsync: Načítám konfiguraci z {newDeviceIp}");
-                                    await LoadDeviceConfigAsync();
-                                    this.Invoke((MethodInvoker)delegate
-                                    {
-                                        _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFound"), newDeviceIp);
-                                        _statusLabel.ForeColor = Color.Green;
-                                    });
-                                }
-                                catch (Exception ex)
-                                {
-                                    DebugLogger.Log($"PerformHostnameScanAsync: Chyba při načítání konfigurace: {ex.Message}");
-                                    this.Invoke((MethodInvoker)delegate
-                                    {
-                                        _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFoundError"), newDeviceIp, ex.Message);
-                                        _statusLabel.ForeColor = Color.Orange;
-                                    });
-                                }
-                            });
-                        }
-                    }
+                    // Před zobrazením zkontrolujeme port 7777 pro každé zařízení
+                    await CheckDevicesPortsAsync(devices);
+                    UpdateDevicesTreeView(devices);
+                    _statusLabel.Text = $"Nalezeno {devices.Count} zařízení.";
+                    StartStatusCheck();
                 }
             }
             catch (Exception ex)
             {
-                DebugLogger.Log($"PerformHostnameScanAsync: Výjimka: {ex.GetType().Name}: {ex.Message}");
-                _scanProgressBar.Style = ProgressBarStyle.Continuous;
-                _scanProgressBar.Visible = false;
-                _statusLabel.Text = string.Format(Localization.GetString("StatusScanError"), ex.Message);
-                _statusLabel.ForeColor = Color.Red;
+                DebugLogger.Log($"ScanButton_Click: Výjimka: {ex.GetType().Name}: {ex.Message}");
+                _statusLabel.Text = $"Chyba při skenování: {ex.Message}";
             }
             finally
             {
                 _scanButton.Enabled = true;
                 _scanRangeButton.Enabled = true;
-            }
-        }
-
-        /// <summary>
-        /// Opakovaně se pokouší najít zařízení na nové IP adrese nebo podle hostname během 60 sekund.
-        /// Během timeoutu pinguje novou IP, dokud nebude dostupná.
-        /// </summary>
-        private async Task FindDeviceAfterIpChangeAsync(string targetHostname, string expectedNewIp)
-        {
-            const int totalTimeoutMs = 60000; // 60 sekund celkový timeout
-            const int pingIntervalMs = 2000; // 2 sekundy mezi pingy
-            const int initialDelayMs = 3000; // 3 sekundy počáteční čekání na restart
-            
-            DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Začátek hledání zařízení. Hostname: {targetHostname}, Očekávaná IP: {expectedNewIp}");
-            
-            var startTime = DateTime.Now;
-            int pingAttemptNumber = 0;
-            bool deviceFound = false;
-            bool ipReachable = false;
-            
-            // Počáteční čekání na restart zařízení
-            this.Invoke((MethodInvoker)delegate
-            {
-                _statusLabel.Text = string.Format(Localization.GetString("StatusIpChanged"), expectedNewIp);
-                _statusLabel.ForeColor = Color.Blue;
-                _scanProgressBar.Visible = true;
-                _scanProgressBar.Style = ProgressBarStyle.Continuous;
-                _scanProgressBar.Value = 0;
-                _scanProgressBar.Minimum = 0;
-                _scanProgressBar.Maximum = 100;
-            });
-            
-            // Počáteční čekání s progress barem
-            for (int i = 0; i < initialDelayMs; i += 100)
-            {
-                await Task.Delay(100);
-                var progress = (int)((i / (double)initialDelayMs) * 10); // 0-10% pro počáteční čekání
-                this.Invoke((MethodInvoker)delegate
-                {
-                    _scanProgressBar.Value = progress;
-                });
-            }
-            
-            // Fáze 1: Pingování nové IP adresy, dokud nebude dostupná
-            if (!string.IsNullOrEmpty(expectedNewIp))
-            {
-                DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Začínám pingování IP {expectedNewIp}");
-                
-                while ((DateTime.Now - startTime).TotalMilliseconds < totalTimeoutMs && !ipReachable)
-                {
-                    pingAttemptNumber++;
-                    var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
-                    var remaining = (totalTimeoutMs - elapsed) / 1000.0;
-                    
-                    // Vypočítáme progress: 10-90% pro pingování (10% je pro počáteční čekání, 90% pro pingování)
-                    var pingProgress = 10 + (int)((elapsed / (double)totalTimeoutMs) * 80);
-                    pingProgress = Math.Min(90, Math.Max(10, pingProgress));
-                    
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        _statusLabel.Text = string.Format(Localization.GetString("StatusPinging"), expectedNewIp, pingAttemptNumber, remaining.ToString("F0"));
-                        _statusLabel.ForeColor = Color.Blue;
-                        _scanProgressBar.Value = pingProgress;
-                    });
-                    
-                    try
-                    {
-                        using (var ping = new System.Net.NetworkInformation.Ping())
-                        {
-                            var reply = await ping.SendPingAsync(expectedNewIp, 2000);
-                            
-                            if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
-                            {
-                                DebugLogger.Log($"FindDeviceAfterIpChangeAsync: IP {expectedNewIp} je dostupná (ping úspěšný)!");
-                                ipReachable = true;
-                                
-                                this.Invoke((MethodInvoker)delegate
-                                {
-                                    _statusLabel.Text = string.Format(Localization.GetString("StatusIpReachable"), expectedNewIp);
-                                    _statusLabel.ForeColor = Color.Blue;
-                                    _scanProgressBar.Value = 90; // 90% - IP je dostupná, připojujeme se
-                                });
-                                break;
-                            }
-                            else
-                            {
-                                DebugLogger.Log($"FindDeviceAfterIpChangeAsync: IP {expectedNewIp} ještě neodpovídá (status: {reply.Status})");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Chyba při pingování: {ex.Message}");
-                    }
-                    
-                    // Počkáme před dalším pingem
-                    var remainingMs = totalTimeoutMs - (int)(DateTime.Now - startTime).TotalMilliseconds;
-                    if (remainingMs > 0)
-                    {
-                        var waitTime = Math.Min(pingIntervalMs, remainingMs);
-                        await Task.Delay(waitTime);
-                    }
-                }
-            }
-            
-            // Fáze 2: Pokud je IP dostupná, zkusíme připojení a skenování
-            if (ipReachable && !string.IsNullOrEmpty(expectedNewIp))
-            {
-                DebugLogger.Log($"FindDeviceAfterIpChangeAsync: IP je dostupná, zkouším připojení a načtení konfigurace");
-                
-                this.Invoke((MethodInvoker)delegate
-                {
-                    _scanProgressBar.Value = 95; // 95% - připojujeme se k serveru
-                });
-                
-                try
-                {
-                    // Zkusíme přímé připojení na novou IP
-                    DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Zkouším přímé připojení na {expectedNewIp}");
-                    var testResponse = await _client.SendRequestAsync(expectedNewIp, "get_config");
-                    
-                    if (testResponse.Status == "ok" && !string.IsNullOrEmpty(testResponse.DataJson))
-                    {
-                        DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Zařízení nalezeno na IP {expectedNewIp}!");
-                        
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            _scanProgressBar.Value = 100; // 100% - zařízení nalezeno
-                        });
-                        
-                        // Aktualizujeme vybrané zařízení a listbox
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            if (_selectedDevice != null)
-                            {
-                                // Aktualizujeme IP adresu v existujícím zařízení
-                                _selectedDevice.IPAddress = expectedNewIp;
-                                _selectedDevice.Status = "OK";
-                                
-                                // Aktualizujeme listbox - najdeme zařízení a aktualizujeme ho, nebo přidáme nové
-                                bool deviceInList = false;
-                                for (int i = 0; i < _devicesListBox.Items.Count; i++)
-                                {
-                                    if (_devicesListBox.Items[i] is NetworkDevice device && 
-                                        (device.IPAddress == expectedNewIp || device == _selectedDevice))
-                                    {
-                                        // Aktualizujeme existující zařízení
-                                        _devicesListBox.Items[i] = _selectedDevice;
-                                        deviceInList = true;
-                                        _devicesListBox.SelectedIndex = i;
-                                        break;
-                                    }
-                                }
-                                
-                                // Pokud zařízení není v listboxu, přidáme ho
-                                if (!deviceInList)
-                                {
-                                    _devicesListBox.Items.Add(_selectedDevice);
-                                    _devicesListBox.SelectedIndex = _devicesListBox.Items.Count - 1;
-                                }
-                                
-                                // Obnovíme zobrazení listboxu
-                                _devicesListBox.Refresh();
-                            }
-                        });
-                        
-                        // Načteme konfiguraci (mimo Invoke, protože LoadDeviceConfigAsync už používá Invoke)
-                        try
-                        {
-                            await LoadDeviceConfigAsync();
-                            this.Invoke((MethodInvoker)delegate
-                            {
-                                _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFound"), expectedNewIp);
-                                _statusLabel.ForeColor = Color.Green;
-                                _scanProgressBar.Value = 100;
-                                _scanProgressBar.Visible = false;
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Chyba při načítání konfigurace: {ex.Message}");
-                            this.Invoke((MethodInvoker)delegate
-                            {
-                                _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFoundError"), expectedNewIp, ex.Message);
-                                _statusLabel.ForeColor = Color.Orange;
-                                _scanProgressBar.Value = 100;
-                                _scanProgressBar.Visible = false;
-                            });
-                        }
-                        
-                        deviceFound = true;
-                    }
-                    else
-                    {
-                        DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Připojení na {expectedNewIp} selhalo, zkouším skenování podle hostname");
-                        
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            _statusLabel.Text = Localization.GetString("StatusConnectionFailed");
-                            _scanProgressBar.Value = 95; // 95% - skenujeme síť
-                        });
-                        
-                        // Pokud přímé připojení nefunguje, zkusíme skenování podle hostname
-                        if (!string.IsNullOrEmpty(targetHostname))
-                        {
-                            DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Zkouším skenování podle hostname '{targetHostname}'");
-                            
-                            var devices = await _scanner.ScanNetworkAsync();
-                            
-                            // Hledáme podle hostname nebo nové IP
-                            var foundDevice = devices.FirstOrDefault(d => 
-                                (!string.IsNullOrEmpty(d.Hostname) && d.Hostname.Equals(targetHostname, StringComparison.OrdinalIgnoreCase)) ||
-                                d.IPAddress == expectedNewIp);
-                            
-                            if (foundDevice != null)
-                            {
-                                DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Zařízení nalezeno při skenování: {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                                
-                                this.Invoke((MethodInvoker)delegate
-                                {
-                                    // Aktualizujeme seznam zařízení
-                                    _devicesListBox.Items.Clear();
-                                    foreach (var device in devices.OrderByDescending(d => d.Status == "OK"))
-                                    {
-                                        _devicesListBox.Items.Add(device);
-                                    }
-                                    
-                                    // Vybereme nalezené zařízení
-                                    int index = _devicesListBox.Items.IndexOf(foundDevice);
-                                    if (index >= 0)
-                                    {
-                                        _devicesListBox.SelectedIndex = index;
-                                        _selectedDevice = foundDevice;
-                                        
-                                        // Načteme konfiguraci
-                                        Task.Run(async () =>
-                                        {
-                                            try
-                                            {
-                                                await LoadDeviceConfigAsync();
-                                                this.Invoke((MethodInvoker)delegate
-                                                {
-                                                    _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFound"), foundDevice.IPAddress);
-                                                    _statusLabel.ForeColor = Color.Green;
-                                                    _scanProgressBar.Visible = false;
-                                                });
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Chyba při načítání konfigurace: {ex.Message}");
-                                                this.Invoke((MethodInvoker)delegate
-                                                {
-                                                    _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceFoundError"), foundDevice.IPAddress, ex.Message);
-                                                    _statusLabel.ForeColor = Color.Orange;
-                                                    _scanProgressBar.Visible = false;
-                                                });
-                                            }
-                                        });
-                                    }
-                                });
-                                
-                                deviceFound = true;
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Chyba při připojení: {ex.Message}");
-                }
-            }
-            
-            // Pokud jsme nenašli zařízení po 60 sekundách nebo IP nebyla dostupná
-            if (!deviceFound)
-            {
-                if (!ipReachable)
-                {
-                    DebugLogger.Log($"FindDeviceAfterIpChangeAsync: IP {expectedNewIp} nebyla dostupná během 60 sekund");
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        _statusLabel.Text = string.Format(Localization.GetString("StatusIpNotReachable"), expectedNewIp);
-                        _statusLabel.ForeColor = Color.Orange;
-                        _scanProgressBar.Value = 100;
-                        _scanProgressBar.Visible = false;
-                    });
-                }
-                else
-                {
-                    DebugLogger.Log($"FindDeviceAfterIpChangeAsync: Zařízení nebylo nalezeno během 60 sekund");
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        _statusLabel.Text = Localization.GetString("StatusDeviceNotFound");
-                        _statusLabel.ForeColor = Color.Orange;
-                        _scanProgressBar.Value = 100;
-                        _scanProgressBar.Visible = false;
-                    });
-                }
-                
-                // Vynulujeme vybrané zařízení
-                this.Invoke((MethodInvoker)delegate
-                {
-                    _selectedDevice = null;
-                    _currentConfig = null;
-                    UpdateConfigDisplay();
-                });
             }
         }
 
@@ -577,14 +95,15 @@ namespace DeviceConfigurator
             
             if (string.IsNullOrWhiteSpace(ipRange))
             {
-                _statusLabel.Text = Localization.GetString("StatusEnterIpRange");
+                _statusLabel.Text = "Zadejte IP rozsah (např. 192.168.0.1-255)";
                 return;
             }
 
             _scanButton.Enabled = false;
             _scanRangeButton.Enabled = false;
-            _statusLabel.Text = string.Format(Localization.GetString("StatusScanningRange"), ipRange);
-            _devicesListBox.Items.Clear();
+            _statusLabel.Text = $"Skenování IP rozsahu {ipRange}...";
+            _devicesTreeView.Nodes.Clear();
+            _deviceNodes.Clear();
             _selectedDevice = null;
             _currentConfig = null;
             UpdateConfigDisplay();
@@ -602,18 +121,21 @@ namespace DeviceConfigurator
                     // Seřazení podle statusu (OK první, pak ERROR)
                     devices = devices.OrderByDescending(d => d.Status == "OK").ToList();
                     
-                    foreach (var device in devices)
-                    {
-                        _devicesListBox.Items.Add(device);
-                    }
+                    // Před zobrazením zkontrolujeme port 7777 pro každé zařízení
+                    await CheckDevicesPortsAsync(devices);
+                    UpdateDevicesTreeView(devices);
                     
-                    _statusLabel.Text = string.Format(Localization.GetString("StatusDevicesFound"), devices.Count);
+                    int okCount = devices.Count(d => d.Status == "OK");
+                    int warningCount = devices.Count(d => d.Status == "WARNING");
+                    int errorCount = devices.Count(d => d.Status == "ERROR");
+                    _statusLabel.Text = $"Skenování dokončeno: {okCount} OK, {warningCount} WARNING, {errorCount} ERROR (celkem {devices.Count} zařízení).";
+                    StartStatusCheck();
                 }
             }
             catch (Exception ex)
             {
                 DebugLogger.Log($"ScanRangeButton_Click: Výjimka: {ex.GetType().Name}: {ex.Message}");
-                _statusLabel.Text = string.Format(Localization.GetString("StatusScanError"), ex.Message);
+                _statusLabel.Text = $"Chyba při skenování IP rozsahu: {ex.Message}";
             }
             finally
             {
@@ -622,17 +144,17 @@ namespace DeviceConfigurator
             }
         }
 
-        private async void DevicesListBox_SelectedIndexChanged(object? sender, EventArgs e)
+        private async void DevicesTreeView_AfterSelect(object? sender, TreeViewEventArgs e)
         {
-            if (_devicesListBox.SelectedItem is NetworkDevice device)
+            if (e.Node?.Tag is NetworkDevice device)
             {
-                DebugLogger.Log($"DevicesListBox_SelectedIndexChanged: Vybráno zařízení: {device.IPAddress} ({device.Status})");
+                DebugLogger.Log($"DevicesTreeView_AfterSelect: Vybráno zařízení: {device.IPAddress} ({device.Status})");
                 _selectedDevice = device;
                 
                 // Pokud je status ERROR, nezkoušíme načítat konfiguraci
                 if (device.Status == "ERROR")
                 {
-                    _statusLabel.Text = string.Format(Localization.GetString("StatusDeviceNotAvailable"), device.IPAddress);
+                    _statusLabel.Text = $"Zařízení {device.IPAddress} není dostupné (ERROR).";
                     _currentConfig = null;
                     UpdateConfigDisplay();
                     _refreshButton.Enabled = false;
@@ -653,11 +175,7 @@ namespace DeviceConfigurator
 
             DebugLogger.Log($"LoadDeviceConfigAsync: Začátek pro {_selectedDevice.IPAddress}");
             _refreshButton.Enabled = false;
-            _statusLabel.Text = string.Format(Localization.GetString("StatusLoading"), _selectedDevice.IPAddress);
-            _statusLabel.ForeColor = Color.Blue;
-            _scanProgressBar.Visible = true;
-            _scanProgressBar.Style = ProgressBarStyle.Marquee; // Animovaný progress bar pro načítání
-            _scanProgressBar.MarqueeAnimationSpeed = 30; // Rychlost animace
+            _statusLabel.Text = $"Načítání konfigurace z {_selectedDevice.IPAddress}...";
 
             try
             {
@@ -669,10 +187,7 @@ namespace DeviceConfigurator
                 
                 if (string.IsNullOrEmpty(response.Status))
                 {
-                    _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                    _scanProgressBar.Visible = false;
                     _statusLabel.Text = $"Server vrátil prázdný status. Zkontrolujte připojení.";
-                    _statusLabel.ForeColor = Color.Orange;
                     _refreshButton.Enabled = true;
                     _currentConfig = null;
                     UpdateConfigDisplay();
@@ -682,28 +197,7 @@ namespace DeviceConfigurator
                 if (response.Status == "error")
                 {
                     string errorMsg = response.Error ?? "Neznámá chyba";
-                    _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                    _scanProgressBar.Visible = false;
-                    
-                    // ZAKOMENTOVÁNO: Automatické vyhledávání hostname
-                    // Pokud je to timeout nebo chyba připojení, spustíme automatické skenování
-                    // if (IsConnectionError(errorMsg))
-                    // {
-                    //     DebugLogger.Log($"LoadDeviceConfigAsync: Server neodpovídá ({errorMsg}). Spouštím automatické skenování sítě.");
-                    //     string savedHostname = _selectedDevice?.Hostname ?? "";
-                    //     _statusLabel.Text = $"Server neodpovídá. Spouštím skenování sítě pro nalezení zařízení...";
-                    //     _statusLabel.ForeColor = Color.Orange;
-                    //     _refreshButton.Enabled = true;
-                    //     _currentConfig = null;
-                    //     UpdateConfigDisplay();
-                    //     
-                    //     // Spustíme automatické skenování
-                    //     await PerformHostnameScanAsync(savedHostname, null);
-                    //     return;
-                    // }
-                    
                     _statusLabel.Text = $"Chyba serveru: {errorMsg}";
-                    _statusLabel.ForeColor = Color.Red;
                     _refreshButton.Enabled = true;
                     _currentConfig = null;
                     UpdateConfigDisplay();
@@ -712,22 +206,16 @@ namespace DeviceConfigurator
                 
                 if (response.Status != "ok")
                 {
-                    _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                    _scanProgressBar.Visible = false;
                     _statusLabel.Text = $"Neočekávaný status serveru: '{response.Status}'. Očekáváno 'ok' nebo 'error'.";
-                    _statusLabel.ForeColor = Color.Orange;
                     _refreshButton.Enabled = true;
                     _currentConfig = null;
                     UpdateConfigDisplay();
                     return;
                 }
-
+                
                 if (string.IsNullOrEmpty(response.DataJson))
                 {
-                    _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                    _scanProgressBar.Visible = false;
                     _statusLabel.Text = "Server odpověděl OK, ale bez dat. Zkontrolujte kompatibilitu verzí.";
-                    _statusLabel.ForeColor = Color.Orange;
                     _refreshButton.Enabled = true;
                     _currentConfig = null;
                     UpdateConfigDisplay();
@@ -743,18 +231,12 @@ namespace DeviceConfigurator
                     UpdateConfigDisplay();
                     _refreshButton.Enabled = true;
                     _saveButton.Enabled = true;
-                    _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                    _scanProgressBar.Visible = false;
-                    _statusLabel.Text = Localization.GetString("StatusConfigLoaded");
-                    _statusLabel.ForeColor = Color.Green;
+                    _statusLabel.Text = "Konfigurace načtena úspěšně.";
                 }
                 else
                 {
                     DebugLogger.Log($"LoadDeviceConfigAsync: Konfigurace se nepodařilo parsovat");
-                    _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                    _scanProgressBar.Visible = false;
                     _statusLabel.Text = "Server odpověděl, ale data nelze parsovat. Zkontrolujte kompatibilitu verzí.";
-                    _statusLabel.ForeColor = Color.Orange;
                     _refreshButton.Enabled = true;
                     _currentConfig = null;
                     UpdateConfigDisplay();
@@ -763,80 +245,11 @@ namespace DeviceConfigurator
             catch (Exception ex)
             {
                 DebugLogger.Log($"LoadDeviceConfigAsync: Výjimka: {ex.GetType().Name}: {ex.Message}");
-                _scanProgressBar.Style = ProgressBarStyle.Continuous; // Vrátíme zpět na Continuous
-                _scanProgressBar.Visible = false;
-                
-                // ZAKOMENTOVÁNO: Automatické vyhledávání hostname
-                // Pokud je to chyba připojení, spustíme automatické skenování
-                // if (IsConnectionException(ex))
-                // {
-                //     DebugLogger.Log($"LoadDeviceConfigAsync: Chyba připojení ({ex.Message}). Spouštím automatické skenování sítě.");
-                //     string savedHostname = _selectedDevice?.Hostname ?? "";
-                //     _statusLabel.Text = $"Chyba připojení. Spouštím skenování sítě pro nalezení zařízení...";
-                //     _statusLabel.ForeColor = Color.Orange;
-                //     _refreshButton.Enabled = true;
-                //     _currentConfig = null;
-                //     UpdateConfigDisplay();
-                //     
-                //     // Spustíme automatické skenování
-                //     await PerformHostnameScanAsync(savedHostname, null);
-                //     return;
-                // }
-                
                 _statusLabel.Text = $"Chyba při načítání konfigurace: {ex.Message}";
-                _statusLabel.ForeColor = Color.Red;
                 _refreshButton.Enabled = true;
                 _currentConfig = null;
                 UpdateConfigDisplay();
             }
-        }
-
-        /// <summary>
-        /// Zkontroluje, zda je chybová zpráva typu timeout nebo chyba připojení.
-        /// </summary>
-        private bool IsConnectionError(string errorMsg)
-        {
-            if (string.IsNullOrEmpty(errorMsg))
-                return false;
-            
-            string lowerError = errorMsg.ToLowerInvariant();
-            return lowerError.Contains("timeout") ||
-                   lowerError.Contains("připojení") ||
-                   lowerError.Contains("connection") ||
-                   lowerError.Contains("nelze se připojit") ||
-                   lowerError.Contains("cannot connect") ||
-                   lowerError.Contains("spojení uzavřeno") ||
-                   lowerError.Contains("connection closed") ||
-                   lowerError.Contains("žádná data ze serveru") ||
-                   lowerError.Contains("timeout při čtení odpovědi");
-        }
-
-        /// <summary>
-        /// Zkontroluje, zda je výjimka typu chyba připojení.
-        /// </summary>
-        private bool IsConnectionException(Exception ex)
-        {
-            if (ex == null)
-                return false;
-            
-            // SocketException nebo TimeoutException jsou chyby připojení
-            if (ex is System.Net.Sockets.SocketException || ex is System.TimeoutException)
-                return true;
-            
-            // Zkontrolujeme také vnitřní výjimky
-            if (ex.InnerException != null)
-            {
-                if (ex.InnerException is System.Net.Sockets.SocketException || 
-                    ex.InnerException is System.TimeoutException)
-                    return true;
-            }
-            
-            // Zkontrolujeme zprávu výjimky
-            string lowerMsg = ex.Message.ToLowerInvariant();
-            return lowerMsg.Contains("timeout") ||
-                   lowerMsg.Contains("connection") ||
-                   lowerMsg.Contains("připojení") ||
-                   lowerMsg.Contains("socket");
         }
 
         private void UpdateConfigDisplay()
@@ -871,26 +284,28 @@ namespace DeviceConfigurator
             
             if (_sshStatusLabel.Tag is Label sshValueLabel)
             {
-                sshValueLabel.Text = _currentConfig.SshEnabled ? Localization.GetString("SshEnabled") : Localization.GetString("SshDisabled");
-                sshValueLabel.ForeColor = _currentConfig.SshEnabled ? Color.Green : Color.Red;
+                bool sshEnabled = _currentConfig.SshEnabled ?? false;
+                sshValueLabel.Text = sshEnabled ? "Povoleno" : "Zakázáno";
+                sshValueLabel.ForeColor = sshEnabled ? Color.Green : Color.Red;
             }
             
             if (_rootLoginLabel.Tag is Label rootLoginValueLabel)
             {
-                rootLoginValueLabel.Text = _currentConfig.RootLoginEnabled ? Localization.GetString("SshEnabled") : Localization.GetString("SshDisabled");
-                rootLoginValueLabel.ForeColor = _currentConfig.RootLoginEnabled ? Color.Green : Color.Red;
+                bool rootLoginEnabled = _currentConfig.RootLoginEnabled ?? false;
+                rootLoginValueLabel.Text = rootLoginEnabled ? "Povoleno" : "Zakázáno";
+                rootLoginValueLabel.ForeColor = rootLoginEnabled ? Color.Green : Color.Red;
             }
             
             if (_rootPasswordLabel.Tag is Label rootPasswordValueLabel)
             {
-                rootPasswordValueLabel.Text = _currentConfig.RootPasswordSet ? Localization.GetString("RootPasswordSet") : Localization.GetString("RootPasswordNotSet");
+                rootPasswordValueLabel.Text = _currentConfig.RootPasswordSet ? "Nastaveno" : "Nenastaveno";
                 rootPasswordValueLabel.ForeColor = _currentConfig.RootPasswordSet ? Color.Green : Color.Orange;
             }
 
             // Aktualizace editovatelných polí
             _hostnameTextBox.Text = _currentConfig.Hostname;
-            _sshEnabledCheckBox.Checked = _currentConfig.SshEnabled;
-            _rootLoginCheckBox.Checked = _currentConfig.RootLoginEnabled;
+            _sshEnabledCheckBox.Checked = _currentConfig.SshEnabled ?? false;
+            _rootLoginCheckBox.Checked = _currentConfig.RootLoginEnabled ?? false;
         }
 
         private async void RefreshButton_Click(object? sender, EventArgs e)
@@ -908,27 +323,15 @@ namespace DeviceConfigurator
 
             DebugLogger.Log($"SaveButton_Click: Ukládání změn pro {_selectedDevice.IPAddress}");
             _saveButton.Enabled = false;
-            _statusLabel.Text = Localization.GetString("StatusSaving");
+            _statusLabel.Text = "Ukládání změn...";
 
             try
             {
                 bool success = true;
                 string errorMessage = "";
-                
-                // Nejdřív zjistíme, zda se bude měnit IP adresa
-                string? newStaticIp = null;
-                string? oldIpAddress = null;
-                bool willChangeIp = false;
-                
-                if (!string.IsNullOrWhiteSpace(_staticIpTextBox.Text))
-                {
-                    oldIpAddress = _selectedDevice.IPAddress;
-                    newStaticIp = _staticIpTextBox.Text.Trim();
-                    willChangeIp = (newStaticIp != oldIpAddress);
-                }
 
-                // Změna hostname (pouze pokud se nemění IP, protože po změně IP se zařízení restartuje)
-                if (!willChangeIp && !string.IsNullOrWhiteSpace(_hostnameTextBox.Text) && 
+                // Změna hostname
+                if (!string.IsNullOrWhiteSpace(_hostnameTextBox.Text) && 
                     _hostnameTextBox.Text != _currentConfig?.Hostname)
                 {
                     DebugLogger.Log($"SaveButton_Click: Změna hostname na {_hostnameTextBox.Text}");
@@ -940,8 +343,8 @@ namespace DeviceConfigurator
                     }
                 }
 
-                // Změna hesla uživatele (pouze pokud se nemění IP)
-                if (!willChangeIp && !string.IsNullOrWhiteSpace(_passwordTextBox.Text))
+                // Změna hesla uživatele
+                if (!string.IsNullOrWhiteSpace(_passwordTextBox.Text))
                 {
                     string username = _usernameTextBox.Text.Trim();
                     if (string.IsNullOrWhiteSpace(username))
@@ -961,8 +364,8 @@ namespace DeviceConfigurator
                     }
                 }
 
-                // Změna root hesla (pouze pokud se nemění IP)
-                if (!willChangeIp && !string.IsNullOrWhiteSpace(_rootPasswordTextBox.Text))
+                // Změna root hesla
+                if (!string.IsNullOrWhiteSpace(_rootPasswordTextBox.Text))
                 {
                     DebugLogger.Log("SaveButton_Click: Změna root hesla");
                     var response = await _client.SetRootPasswordAsync(_selectedDevice.IPAddress, _rootPasswordTextBox.Text);
@@ -973,8 +376,8 @@ namespace DeviceConfigurator
                     }
                 }
 
-                // Změna SSH stavu (pouze pokud se nemění IP)
-                if (!willChangeIp && _sshEnabledCheckBox.Checked != _currentConfig?.SshEnabled)
+                // Změna SSH stavu
+                if (_sshEnabledCheckBox.Checked != _currentConfig?.SshEnabled)
                 {
                     DebugLogger.Log($"SaveButton_Click: Změna SSH na {_sshEnabledCheckBox.Checked}");
                     var response = await _client.SetSshEnabledAsync(_selectedDevice.IPAddress, _sshEnabledCheckBox.Checked);
@@ -985,8 +388,8 @@ namespace DeviceConfigurator
                     }
                 }
 
-                // Změna root login stavu (pouze pokud se nemění IP)
-                if (!willChangeIp && _rootLoginCheckBox.Checked != _currentConfig?.RootLoginEnabled)
+                // Změna root login stavu
+                if (_rootLoginCheckBox.Checked != _currentConfig?.RootLoginEnabled)
                 {
                     DebugLogger.Log($"SaveButton_Click: Změna root login na {_rootLoginCheckBox.Checked}");
                     var response = await _client.SetRootLoginAsync(_selectedDevice.IPAddress, _rootLoginCheckBox.Checked);
@@ -997,10 +400,14 @@ namespace DeviceConfigurator
                     }
                 }
 
-                // Nastavení statické IP adresy - JAKO POSLEDNÍ, protože po změně IP se zařízení restartuje
+                // Nastavení statické IP adresy
+                string? newStaticIp = null;
+                string? oldIpAddress = null;
                 if (!string.IsNullOrWhiteSpace(_staticIpTextBox.Text))
                 {
-                    DebugLogger.Log($"SaveButton_Click: Nastavení statické IP {newStaticIp}");
+                    DebugLogger.Log($"SaveButton_Click: Nastavení statické IP {_staticIpTextBox.Text}");
+                    oldIpAddress = _selectedDevice.IPAddress;
+                    newStaticIp = _staticIpTextBox.Text.Trim();
                     string netmask = string.IsNullOrWhiteSpace(_netmaskTextBox.Text) ? "255.255.255.0" : _netmaskTextBox.Text.Trim();
                     string? gateway = string.IsNullOrWhiteSpace(_gatewayTextBox.Text) ? null : _gatewayTextBox.Text.Trim();
                     
@@ -1010,25 +417,11 @@ namespace DeviceConfigurator
                         netmask, 
                         gateway
                     );
-                    
-                    // Při změně statické IP se zařízení restartuje, takže timeout je očekávaný
-                    // Pokud je timeout, považujeme to za úspěch (požadavek byl odeslán)
                     if (response.Status != "ok")
                     {
-                        // Pokud je timeout při změně IP, považujeme to za úspěch (zařízení se restartuje)
-                        if (response.Error != null && response.Error.Contains("Timeout"))
-                        {
-                            DebugLogger.Log($"SaveButton_Click: Timeout při změně statické IP - to je očekávané, zařízení se restartuje. Považuji za úspěch.");
-                            // Považujeme to za úspěch, protože požadavek byl odeslán a zařízení se restartuje
-                        }
-                        else
-                        {
-                            // Jiná chyba než timeout - skutečná chyba
-                            success = false;
-                            errorMessage += $"Statická IP: {response.Error}; ";
-                            newStaticIp = null; // Nebudeme sledovat změnu, pokud nastavení selhalo
-                            willChangeIp = false;
-                        }
+                        success = false;
+                        errorMessage += $"Statická IP: {response.Error}; ";
+                        newStaticIp = null; // Nebudeme sledovat změnu, pokud nastavení selhalo
                     }
                 }
 
@@ -1036,22 +429,17 @@ namespace DeviceConfigurator
                 {
                     DebugLogger.Log("SaveButton_Click: Všechny změny úspěšně uloženy");
                     
-                    // Pokud byla nastavena statická IP, aktualizujeme vybrané zařízení na novou IP
+                    // Pokud byla nastavena statická IP, spustíme polling pro sledování změny
                     if (newStaticIp != null && oldIpAddress != null && newStaticIp != oldIpAddress)
                     {
-                        DebugLogger.Log($"SaveButton_Click: IP adresa se změnila z {oldIpAddress} na {newStaticIp}. Spouštím hledání zařízení na nové IP.");
-                        
-                        // Zastavíme všechny pokusy o připojení k původní IP
-                        StopIpPolling();
-                        
-                        // Spustíme hledání zařízení na nové IP a podle hostname během 60 sekund
-                        string savedHostname = _selectedDevice?.Hostname ?? "";
-                        await FindDeviceAfterIpChangeAsync(savedHostname, newStaticIp);
+                        _statusLabel.Text = $"Změny uloženy. Čekám na změnu IP adresy na {newStaticIp}...";
+                        DebugLogger.Log($"SaveButton_Click: Spouštím polling pro sledování změny IP z {oldIpAddress} na {newStaticIp}");
+                        StartIpPolling(oldIpAddress, newStaticIp);
                     }
                     else
                     {
-                        _statusLabel.Text = Localization.GetString("StatusSaved");
-                        // Obnovení konfigurace pokud se IP nezměnila
+                        _statusLabel.Text = "Změny byly úspěšně uloženy.";
+                        // Obnovení konfigurace
                         await LoadDeviceConfigAsync();
                     }
                     
@@ -1059,72 +447,21 @@ namespace DeviceConfigurator
                     _rootPasswordTextBox.Text = "";
                     _staticIpTextBox.Text = "";
                     _gatewayTextBox.Text = "";
-                    
-                    // Spustíme nové skenování podle hostname
-                    // ZAKOMENTOVÁNO: Automatické vyhledávání hostname po uložení změn
-                    // Předáme hostname a novou IP pro automatické vyhledání
-                    // DebugLogger.Log("SaveButton_Click: Spouštím nové skenování podle hostname");
-                    // await PerformHostnameScanAsync(savedHostname, newIp);
                 }
                 else
                 {
                     DebugLogger.Log($"SaveButton_Click: Chyby při ukládání: {errorMessage}");
-                    
-                    // ZAKOMENTOVÁNO: Automatické vyhledávání hostname při timeoutu/chybě připojení
-                    // Zkontrolujeme, zda je to timeout nebo chyba připojení
-                    // if (IsConnectionError(errorMessage))
-                    // {
-                    //     DebugLogger.Log($"SaveButton_Click: Detekována chyba připojení/timeout. Spouštím automatické skenování hostname.");
-                    //     string savedHostname = _selectedDevice?.Hostname ?? "";
-                    //     _statusLabel.Text = $"Server neodpovídá. Spouštím skenování sítě pro nalezení zařízení...";
-                    //     _statusLabel.ForeColor = Color.Orange;
-                    //     
-                    //     // Vynulujeme vybrané zařízení, protože se nemůžeme připojit
-                    //     _selectedDevice = null;
-                    //     _currentConfig = null;
-                    //     UpdateConfigDisplay();
-                    //     
-                    //     // Spustíme automatické skenování
-                    //     await PerformHostnameScanAsync(savedHostname, null);
-                    // }
-                    // else
-                    // {
-                        _statusLabel.Text = $"Chyba při ukládání: {errorMessage}";
-                        _statusLabel.ForeColor = Color.Red;
-                    // }
+                    _statusLabel.Text = $"Chyba při ukládání: {errorMessage}";
                 }
             }
             catch (Exception ex)
             {
                 DebugLogger.Log($"SaveButton_Click: Výjimka: {ex.GetType().Name}: {ex.Message}");
-                
-                // ZAKOMENTOVÁNO: Automatické vyhledávání hostname při výjimce
-                // Pokud je to chyba připojení, spustíme automatické skenování
-                // if (IsConnectionException(ex))
-                // {
-                //     DebugLogger.Log($"SaveButton_Click: Chyba připojení při ukládání. Spouštím automatické skenování hostname.");
-                //     string savedHostname = _selectedDevice?.Hostname ?? "";
-                //     _statusLabel.Text = $"Chyba připojení. Spouštím skenování sítě pro nalezení zařízení...";
-                //     _statusLabel.ForeColor = Color.Orange;
-                //     
-                //     // Vynulujeme vybrané zařízení, protože se nemůžeme připojit
-                //     _selectedDevice = null;
-                //     _currentConfig = null;
-                //     UpdateConfigDisplay();
-                //     
-                //     // Spustíme automatické skenování
-                //     await PerformHostnameScanAsync(savedHostname, null);
-                // }
-                // else
-                // {
-                    _statusLabel.Text = $"Chyba: {ex.Message}";
-                    _statusLabel.ForeColor = Color.Red;
-                // }
+                _statusLabel.Text = $"Chyba: {ex.Message}";
             }
             finally
             {
                 _saveButton.Enabled = true;
-                //await PerformHostnameScanAsync();
             }
         }
 
@@ -1180,119 +517,38 @@ namespace DeviceConfigurator
                                         DebugLogger.Log($"StartIpPolling: Úspěšně připojeno k serveru na {newIpAddress}!");
                                         
                                         // Aktualizujeme UI na UI vlákně
-                                        await Task.Run(async () =>
+                                        this.Invoke((MethodInvoker)async delegate
                                         {
-                                            try
+                                            // Aktualizujeme vybrané zařízení s novou IP adresou
+                                            if (_selectedDevice != null)
                                             {
-                                                // Nejdříve aktualizujeme IP adresu v zařízení
-                                                if (_selectedDevice != null)
+                                                string oldHostname = _selectedDevice.Hostname;
+                                                _selectedDevice.IPAddress = newIpAddress;
+                                                _selectedDevice.Status = "OK";
+                                                
+                                                // Aktualizujeme TreeView
+                                                if (_deviceNodes.TryGetValue(_selectedDevice.IPAddress, out var node))
                                                 {
-                                                    this.Invoke((MethodInvoker)delegate
-                                                    {
-                                                        _selectedDevice.IPAddress = newIpAddress;
-                                                        _selectedDevice.Status = "OK";
-                                                        
-                                                        // Aktualizujeme seznam zařízení
-                                                        int selectedIndex = _devicesListBox.SelectedIndex;
-                                                        if (selectedIndex >= 0 && selectedIndex < _devicesListBox.Items.Count)
-                                                        {
-                                                            _devicesListBox.Items[selectedIndex] = _selectedDevice;
-                                                        }
-                                                        
-                                                        _statusLabel.Text = $"IP adresa změněna! Načítám konfiguraci z {newIpAddress}...";
-                                                        _statusLabel.ForeColor = Color.Blue;
-                                                    });
-                                                    
-                                                    // Počkáme chvíli, aby se síť stabilizovala
-                                                    await Task.Delay(2000); // Zvýšeno na 2 sekundy pro stabilizaci
-                                                    
-                                                    // Načteme konfiguraci přímo z nové IP adresy
-                                                    DebugLogger.Log($"StartIpPolling: Načítám konfiguraci z {newIpAddress}");
-                                                    DeviceConfig? newConfig = null;
-                                                    
-                                                    // Zkusíme načíst konfiguraci několikrát (max 3 pokusy)
-                                                    for (int retry = 0; retry < 3; retry++)
-                                                    {
-                                                        try
-                                                        {
-                                                            newConfig = await _client.GetConfigAsync(newIpAddress);
-                                                            if (newConfig != null)
-                                                            {
-                                                                DebugLogger.Log($"StartIpPolling: Konfigurace úspěšně načtena na pokus {retry + 1}");
-                                                                break;
-                                                            }
-                                                        }
-                                                        catch (Exception ex)
-                                                        {
-                                                            DebugLogger.Log($"StartIpPolling: Pokus {retry + 1} selhal: {ex.Message}");
-                                                            if (retry < 2) // Nečekáme po posledním pokusu
-                                                            {
-                                                                await Task.Delay(1000);
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    if (newConfig != null)
-                                                    {
-                                                        DebugLogger.Log($"StartIpPolling: Konfigurace úspěšně načtena z {newIpAddress}");
-                                                        DebugLogger.Log($"StartIpPolling: Nová konfigurace - IP: {newConfig.LocalIP}, Hostname: {newConfig.Hostname}");
-                                                        
-                                                        // Aktualizujeme UI na UI vlákně
-                                                        this.Invoke((MethodInvoker)delegate
-                                                        {
-                                                            _currentConfig = newConfig;
-                                                            
-                                                            // Explicitně aktualizujeme IP adresu v konfiguraci, pokud server vrátil jinou
-                                                            if (newConfig.LocalIP != newIpAddress)
-                                                            {
-                                                                DebugLogger.Log($"StartIpPolling: Server vrátil IP {newConfig.LocalIP}, očekáváno {newIpAddress}, aktualizuji...");
-                                                                newConfig.LocalIP = newIpAddress;
-                                                            }
-                                                            
-                                                            // Vynutíme aktualizaci UI
-                                                            UpdateConfigDisplay();
-                                                            
-                                                            // Zkontrolujeme, zda se IP adresa skutečně zobrazuje
-                                                            if (_ipLabel.Tag is Label ipValueLabel)
-                                                            {
-                                                                DebugLogger.Log($"StartIpPolling: Zobrazená IP v UI: {ipValueLabel.Text}");
-                                                                if (ipValueLabel.Text != newIpAddress)
-                                                                {
-                                                                    DebugLogger.Log($"StartIpPolling: WARNING - IP v UI ({ipValueLabel.Text}) se neshoduje s očekávanou ({newIpAddress}), vynucuji aktualizaci...");
-                                                                    ipValueLabel.Text = newIpAddress;
-                                                                }
-                                                            }
-                                                            
-                                                            _refreshButton.Enabled = true;
-                                                            _saveButton.Enabled = true;
-                                                            _statusLabel.Text = $"IP adresa byla úspěšně změněna na {newIpAddress}! Konfigurace načtena.";
-                                                            _statusLabel.ForeColor = Color.Green;
-                                                            
-                                                            DebugLogger.Log($"StartIpPolling: UI aktualizováno, zobrazená IP: {_currentConfig.LocalIP}");
-                                                            
-                                                            // Vynutíme refresh UI
-                                                            this.Refresh();
-                                                        });
-                                                    }
-                                                    else
-                                                    {
-                                                        DebugLogger.Log($"StartIpPolling: Konfigurace se nepodařilo parsovat z {newIpAddress}");
-                                                        this.Invoke((MethodInvoker)delegate
-                                                        {
-                                                            _statusLabel.Text = $"IP adresa změněna na {newIpAddress}, ale konfigurace se nepodařilo parsovat.";
-                                                            _statusLabel.ForeColor = Color.Orange;
-                                                        });
-                                                    }
+                                                    node.Tag = _selectedDevice;
+                                                    UpdateTreeNode(node, _selectedDevice);
                                                 }
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                DebugLogger.Log($"StartIpPolling: Chyba při načítání konfigurace: {ex.Message}");
-                                                this.Invoke((MethodInvoker)delegate
+                                                
+                                                // Načteme novou konfiguraci na nové IP adrese
+                                                _statusLabel.Text = $"IP adresa změněna! Načítám konfiguraci z {newIpAddress}...";
+                                                _statusLabel.ForeColor = Color.Blue;
+                                                
+                                                try
                                                 {
+                                                    await LoadDeviceConfigAsync();
+                                                    _statusLabel.Text = $"IP adresa byla úspěšně změněna na {newIpAddress}!";
+                                                    _statusLabel.ForeColor = Color.Green;
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    DebugLogger.Log($"StartIpPolling: Chyba při načítání konfigurace: {ex.Message}");
                                                     _statusLabel.Text = $"IP adresa změněna na {newIpAddress}, ale konfigurace se nepodařilo načíst: {ex.Message}";
                                                     _statusLabel.ForeColor = Color.Orange;
-                                                });
+                                                }
                                             }
                                         });
                                         
@@ -1355,546 +611,683 @@ namespace DeviceConfigurator
             }
         }
 
-        /// <summary>
-        /// Spustí automatické nové skenování podle hostname po uložení konfigurace.
-        /// </summary>
-        /// <param name="targetHostname">Hostname zařízení, které má být automaticky vybráno po skenování</param>
-        /// <param name="expectedNewIp">Očekávaná nová IP adresa (pokud byla změněna)</param>
-        private void StartAutoRescan(string targetHostname = null, string expectedNewIp = null)
+        private void ServersMenuItem_Click(object? sender, EventArgs e)
         {
-            // Zastavíme předchozí polling, pokud běží
-            StopIpPolling();
+            using (var serversForm = new ServersForm())
+            {
+                serversForm.ShowDialog(this);
+            }
+        }
 
-            _ipPollingCancellation = new System.Threading.CancellationTokenSource();
-            var cancellationToken = _ipPollingCancellation.Token;
+        private void LanguageCzechMenuItem_Click(object? sender, EventArgs e)
+        {
+            var settings = AppSettings.LoadSettings();
+            settings.Language = "Czech";
+            AppSettings.SaveSettings(settings);
+            Localization.SetLanguage(Localization.Language.Czech);
+            UpdateLanguageUI();
+            UpdateLanguageMenuCheckmarks();
+            MessageBox.Show(Localization.GetString("LanguageChanged"), Localization.GetString("LanguageMenu"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void LanguageEnglishMenuItem_Click(object? sender, EventArgs e)
+        {
+            var settings = AppSettings.LoadSettings();
+            settings.Language = "English";
+            AppSettings.SaveSettings(settings);
+            Localization.SetLanguage(Localization.Language.English);
+            UpdateLanguageUI();
+            UpdateLanguageMenuCheckmarks();
+            MessageBox.Show(Localization.GetString("LanguageChanged"), Localization.GetString("LanguageMenu"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void UpdateLanguageUI()
+        {
+            // Form title
+            this.Text = Localization.GetString("FormTitle");
+            
+            // Menu
+            _languageMenu.Text = Localization.GetString("LanguageMenu");
+            _languageMenu.ToolTipText = Localization.GetString("LanguageMenuTooltip");
+            _languageCzechMenuItem.Text = Localization.GetString("LanguageCzech");
+            _languageEnglishMenuItem.Text = Localization.GetString("LanguageEnglish");
+            
+            _configMenu.Text = Localization.GetString("ConfigMenu");
+            _configMenu.ToolTipText = Localization.GetString("ConfigMenuTooltip");
+            _downloadConfigMenuItem.Text = Localization.GetString("DownloadConfig");
+            _uploadConfigMenuItem.Text = Localization.GetString("UploadConfig");
+            
+            _raspberryMenu.Text = Localization.GetString("RaspberryMenu");
+            _serversMenuItem.Text = Localization.GetString("ServersMenuItem");
+            
+            // GroupBoxes
+            _devicesGroupBox.Text = Localization.GetString("DevicesGroupBox");
+            _scanGroupBox.Text = Localization.GetString("ScanGroupBox");
+            _configGroupBox.Text = Localization.GetString("ConfigGroupBox");
+            _editGroupBox.Text = Localization.GetString("EditGroupBox");
+            
+            // Labels
+            _devicesLabel.Text = Localization.GetString("DevicesLabel");
+            _ipRangeLabel.Text = Localization.GetString("IpRangeLabel");
+            _hostnameScanLabel.Text = Localization.GetString("HostnameScanLabel");
+            _ipLabel.Text = Localization.GetString("IpLabel");
+            _hostnameLabel.Text = Localization.GetString("HostnameLabel");
+            _portLabel.Text = Localization.GetString("PortLabel");
+            _sshStatusLabel.Text = Localization.GetString("SshStatusLabel");
+            _rootLoginLabel.Text = Localization.GetString("RootLoginLabel");
+            _rootPasswordLabel.Text = Localization.GetString("RootPasswordLabel");
+            _newHostnameLabel.Text = Localization.GetString("NewHostnameLabel");
+            _usernameLabel.Text = Localization.GetString("UsernameLabel");
+            _passwordLabel.Text = Localization.GetString("PasswordLabel");
+            _rootPasswordEditLabel.Text = Localization.GetString("RootPasswordEditLabel");
+            _staticIpLabel.Text = Localization.GetString("StaticIpLabel");
+            _netmaskLabel.Text = Localization.GetString("NetmaskLabel");
+            _gatewayLabel.Text = Localization.GetString("GatewayLabel");
+            
+            // Buttons
+            _scanButton.Text = Localization.GetString("ScanButton");
+            _scanRangeButton.Text = Localization.GetString("ScanRangeButton");
+            _saveButton.Text = Localization.GetString("SaveButton");
+            _refreshButton.Text = Localization.GetString("RefreshConfigButton");
+            _debugConsoleButton.Text = Localization.GetString("DebugConsoleButton");
+            
+            // CheckBoxes
+            _sshEnabledCheckBox.Text = Localization.GetString("SshEnabledCheckBox");
+            _rootLoginCheckBox.Text = Localization.GetString("RootLoginCheckBox");
+            
+            // Status
+            _statusLabel.Text = Localization.GetString("ReadyStatusMain");
+        }
+
+        private void UpdateDevicesTreeView(List<NetworkDevice> devices)
+        {
+            _devicesTreeView.BeginUpdate();
+            _devicesTreeView.Nodes.Clear();
+            _deviceNodes.Clear();
+
+            foreach (var device in devices)
+            {
+                var node = new TreeNode
+                {
+                    Text = $"{device.Hostname} ({device.IPAddress})",
+                    Tag = device
+                };
+                UpdateTreeNode(node, device);
+                _devicesTreeView.Nodes.Add(node);
+                _deviceNodes[device.IPAddress] = node;
+            }
+
+            _devicesTreeView.EndUpdate();
+        }
+
+        private void UpdateTreeNode(TreeNode node, NetworkDevice device)
+        {
+            // 0 = online (green), 1 = offline (red), 2 = warning (orange/yellow)
+            int imageIndex;
+            if (device.Status == "OK")
+            {
+                imageIndex = 0; // Zelená - ping OK a port 7777 OK
+            }
+            else if (device.Status == "WARNING")
+            {
+                imageIndex = 2; // Oranžová - ping OK, ale port 7777 nedostupný
+            }
+            else
+            {
+                imageIndex = 1; // Červená - ping selhal
+            }
+            
+            node.ImageIndex = imageIndex;
+            node.SelectedImageIndex = imageIndex;
+            node.Text = $"{device.Hostname} ({device.IPAddress})";
+        }
+
+        private void StartStatusCheck()
+        {
+            StopStatusCheck();
+            _statusCheckCancellation = new CancellationTokenSource();
+            var token = _statusCheckCancellation.Token;
 
             Task.Run(async () =>
             {
-                DebugLogger.Log("StartAutoRescan: Začátek automatického skenování podle hostname");
-                
-                var startTime = DateTime.Now;
-                
-                this.Invoke((MethodInvoker)delegate
+                while (!token.IsCancellationRequested)
                 {
-                    _statusLabel.Text = "Skenování sítě podle hostname... (minimálně 1 minuta)";
-                    _statusLabel.ForeColor = Color.Blue;
-                    _scanProgressBar.Visible = true;
-                    _scanProgressBar.Value = 0;
-                    _scanButton.Enabled = false;
-                    _scanRangeButton.Enabled = false;
-                    _devicesListBox.Items.Clear();
-                    _selectedDevice = null;
-                    _currentConfig = null;
-                    UpdateConfigDisplay();
-                });
-
-                try
-                {
-                    // Spustíme skenování
-                    var devices = await _scanner.ScanNetworkAsync();
-                    
-                    var elapsed = (DateTime.Now - startTime).TotalSeconds;
-                    DebugLogger.Log($"StartAutoRescan: Skenování dokončeno za {elapsed:F1}s, nalezeno {devices.Count} zařízení");
-
-                    if (cancellationToken.IsCancellationRequested)
-                        return;
-
-                    // Aktualizujeme UI s výsledky
-                    this.Invoke((MethodInvoker)delegate
+                    try
                     {
-                        _scanProgressBar.Style = ProgressBarStyle.Continuous;
-                        _scanProgressBar.Value = 100;
-                        _scanProgressBar.Visible = false;
-                        _devicesListBox.Items.Clear();
-                        
-                        if (devices.Count == 0)
+                        await Task.Delay(5000, token); // Kontrola každých 5 sekund
+
+                        if (token.IsCancellationRequested) break;
+
+                        var devices = new List<NetworkDevice>();
+                        this.Invoke((MethodInvoker)delegate
                         {
-                            _statusLabel.Text = "Skenování dokončeno. Nebyla nalezena žádná zařízení.";
-                            _statusLabel.ForeColor = Color.Orange;
-                        }
-                        else
+                            foreach (TreeNode node in _devicesTreeView.Nodes)
+                            {
+                                if (node.Tag is NetworkDevice device)
+                                {
+                                    devices.Add(device);
+                                }
+                            }
+                        });
+
+                        foreach (var device in devices)
                         {
-                            // Seřazení podle statusu (OK první, pak ERROR)
-                            devices = devices.OrderByDescending(d => d.Status == "OK").ToList();
-                            
-                            foreach (var device in devices)
+                            if (token.IsCancellationRequested) break;
+
+                            bool pingOk = await PingDeviceAsync(device.IPAddress);
+                            if (pingOk)
                             {
-                                _devicesListBox.Items.Add(device);
+                                // Ping OK, zkontrolujeme port 7777
+                                bool portOk = await CheckPortAsync(device.IPAddress, 7777);
+                                device.Status = portOk ? "OK" : "WARNING";
                             }
-                            _statusLabel.Text = $"Skenování dokončeno. Nalezeno {devices.Count} zařízení.";
-                            _statusLabel.ForeColor = Color.Green;
-                            
-                            // Pokud máme cílové hostname nebo očekávanou novou IP, zkusíme najít zařízení
-                            NetworkDevice foundDevice = null;
-                            
-                            if (!string.IsNullOrEmpty(targetHostname))
+                            else
                             {
-                                // Hledáme podle hostname
-                                foundDevice = devices.FirstOrDefault(d => 
-                                    d.Hostname.Equals(targetHostname, StringComparison.OrdinalIgnoreCase));
-                                
-                                if (foundDevice != null)
+                                device.Status = "ERROR";
+                            }
+
+                            this.Invoke((MethodInvoker)delegate
+                            {
+                                if (_deviceNodes.TryGetValue(device.IPAddress, out var node))
                                 {
-                                    DebugLogger.Log($"StartAutoRescan: Nalezeno zařízení podle hostname: {foundDevice.Hostname} ({foundDevice.IPAddress})");
+                                    UpdateTreeNode(node, device);
                                 }
-                            }
-                            
-                            // Pokud máme očekávanou novou IP, zkusíme najít zařízení podle IP
-                            if (foundDevice == null && !string.IsNullOrEmpty(expectedNewIp))
-                            {
-                                foundDevice = devices.FirstOrDefault(d => d.IPAddress == expectedNewIp);
-                                
-                                if (foundDevice != null)
-                                {
-                                    DebugLogger.Log($"StartAutoRescan: Nalezeno zařízení podle nové IP: {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                                }
-                            }
-                            
-                            // Pokud bylo dříve vybrané zařízení a nenašli jsme podle parametrů, zkusíme podle hostname
-                            if (foundDevice == null && _selectedDevice != null && !string.IsNullOrEmpty(_selectedDevice.Hostname))
-                            {
-                                foundDevice = devices.FirstOrDefault(d => 
-                                    d.Hostname.Equals(_selectedDevice.Hostname, StringComparison.OrdinalIgnoreCase));
-                                
-                                if (foundDevice != null)
-                                {
-                                    DebugLogger.Log($"StartAutoRescan: Nalezeno zařízení podle původního hostname: {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                                }
-                            }
-                            
-                            // Pokud jsme našli zařízení, automaticky ho vybereme a načteme konfiguraci
-                            if (foundDevice != null)
-                            {
-                                int index = _devicesListBox.Items.IndexOf(foundDevice);
-                                if (index >= 0)
-                                {
-                                    _devicesListBox.SelectedIndex = index;
-                                    
-                                    // Aktualizujeme vybrané zařízení na novou IP adresu
-                                    _selectedDevice = foundDevice;
-                                    DebugLogger.Log($"StartAutoRescan: Automaticky vybráno zařízení {foundDevice.Hostname} ({foundDevice.IPAddress})");
-                                    
-                                    // Automaticky načteme konfiguraci z nového zařízení
-                                    // Použijeme novou IP adresu místo původní
-                                    string newDeviceIp = foundDevice.IPAddress;
-                                    Task.Run(async () =>
-                                    {
-                                        try
-                                        {
-                                            DebugLogger.Log($"StartAutoRescan: Načítám konfiguraci z {newDeviceIp}");
-                                            
-                                            // Načteme konfiguraci přímo z nové IP adresy
-                                            var response = await _client.SendRequestAsync(newDeviceIp, "get_config");
-                                            if (response.Status == "ok")
-                                            {
-                                                var config = await _client.GetConfigAsync(newDeviceIp);
-                                                
-                                                this.Invoke((MethodInvoker)delegate
-                                                {
-                                                    _currentConfig = config;
-                                                    UpdateConfigDisplay();
-                                                    _statusLabel.Text = $"Zařízení nalezeno a připojeno na {newDeviceIp}. Konfigurace načtena.";
-                                                    _statusLabel.ForeColor = Color.Green;
-                                                });
-                                            }
-                                            else
-                                            {
-                                                // Pokud je to chyba připojení, zobrazíme zprávu, ale nevyhodíme výjimku
-                                                // (skenování už běží)
-                                                string errorMsg = response.Error ?? "Neznámá chyba";
-                                                if (IsConnectionError(errorMsg))
-                                                {
-                                                    DebugLogger.Log($"StartAutoRescan: Server na {newDeviceIp} neodpovídá ({errorMsg}). Skenování pokračuje.");
-                                                    this.Invoke((MethodInvoker)delegate
-                                                    {
-                                                        _statusLabel.Text = $"Zařízení nalezeno na {newDeviceIp}, ale server neodpovídá. Skenování pokračuje...";
-                                                        _statusLabel.ForeColor = Color.Orange;
-                                                    });
-                                                }
-                                                else
-                                                {
-                                                    throw new Exception(errorMsg);
-                                                }
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            DebugLogger.Log($"StartAutoRescan: Chyba při načítání konfigurace: {ex.Message}");
-                                            this.Invoke((MethodInvoker)delegate
-                                            {
-                                                _statusLabel.Text = $"Zařízení nalezeno na {newDeviceIp}, ale konfigurace se nepodařilo načíst: {ex.Message}";
-                                                _statusLabel.ForeColor = Color.Orange;
-                                            });
-                                        }
-                                    });
-                                }
-                            }
+                            });
                         }
-                        
-                        _scanButton.Enabled = true;
-                        _scanRangeButton.Enabled = true;
-                    });
-                    
-                    DebugLogger.Log($"StartAutoRescan: Skenování dokončeno, nalezeno {devices.Count} zařízení");
-                }
-                catch (Exception ex)
-                {
-                    DebugLogger.Log($"StartAutoRescan: Chyba při skenování: {ex.Message}");
-                    this.Invoke((MethodInvoker)delegate
+                    }
+                    catch (OperationCanceledException)
                     {
-                        _scanProgressBar.Visible = false;
-                        _statusLabel.Text = $"Chyba při skenování: {ex.Message}";
-                        _statusLabel.ForeColor = Color.Red;
-                        _scanButton.Enabled = true;
-                        _scanRangeButton.Enabled = true;
-                    });
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.Log($"StartStatusCheck: Chyba při kontrole statusu: {ex.Message}");
+                    }
                 }
-                finally
-                {
-                    StopIpPolling();
-                }
-            }, cancellationToken);
+            }, token);
         }
 
-        /// <summary>
-        /// Stáhne aktuální konfiguraci do JSON souboru.
-        /// </summary>
-        private void DownloadConfigMenuItem_Click(object? sender, EventArgs e)
+        private void StopStatusCheck()
         {
-            if (_currentConfig == null)
+            if (_statusCheckCancellation != null)
             {
-                MessageBox.Show(Localization.GetString("MessageLoadConfigFirst"), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _statusCheckCancellation.Cancel();
+                _statusCheckCancellation.Dispose();
+                _statusCheckCancellation = null;
+            }
+        }
+
+        private async Task<bool> PingDeviceAsync(string ipAddress)
+        {
+            try
+            {
+                using (var ping = new Ping())
+                {
+                    var reply = await ping.SendPingAsync(ipAddress, 2000); // 2 sekundy timeout
+                    return reply.Status == IPStatus.Success;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task<bool> CheckPortAsync(string ipAddress, int port)
+        {
+            try
+            {
+                using (var client = new System.Net.Sockets.TcpClient())
+                {
+                    var connectTask = client.ConnectAsync(ipAddress, port);
+                    var timeoutTask = Task.Delay(2000); // 2 sekundy timeout
+
+                    var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+                    if (completedTask == timeoutTask)
+                    {
+                        return false; // Timeout
+                    }
+
+                    await connectTask;
+                    return client.Connected;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task CheckDevicesPortsAsync(List<NetworkDevice> devices)
+        {
+            // Kontrolujeme port 7777 pro všechna zařízení, která mají status OK (ping funguje)
+            var tasks = devices.Where(d => d.Status == "OK").Select(async device =>
+            {
+                bool portOk = await CheckPortAsync(device.IPAddress, 7777);
+                if (!portOk)
+                {
+                    device.Status = "WARNING"; // Ping OK, ale port 7777 nedostupný
+                }
+            }).ToList();
+
+            await Task.WhenAll(tasks);
+        }
+
+        private void UpdateLanguageMenuCheckmarks()
+        {
+            var settings = AppSettings.LoadSettings();
+            _languageCzechMenuItem.Checked = settings.Language == "Czech";
+            _languageEnglishMenuItem.Checked = settings.Language == "English";
+        }
+
+        private async void DownloadConfigMenuItem_Click(object? sender, EventArgs e)
+        {
+            if (_currentConfig == null || _selectedDevice == null)
+            {
+                MessageBox.Show("Nejprve vyberte zařízení a načtěte konfiguraci.", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             using (var saveDialog = new SaveFileDialog())
             {
                 saveDialog.Filter = "JSON soubory (*.json)|*.json|Všechny soubory (*.*)|*.*";
-                saveDialog.FilterIndex = 1;
+                saveDialog.FileName = $"config_{_selectedDevice.Hostname}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
                 saveDialog.DefaultExt = "json";
-                saveDialog.FileName = $"device_config_{_currentConfig.Hostname}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-                saveDialog.Title = "Uložit konfiguraci";
 
                 if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
                     try
                     {
-                        var options = new System.Text.Json.JsonSerializerOptions
-                        {
-                            WriteIndented = true,
-                            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-                        };
-
-                        // Vytvoříme objekt s konfigurací pro uložení
-                        var configToSave = new
-                        {
-                            device = new
-                            {
-                                ipAddress = _selectedDevice?.IPAddress ?? "",
-                                hostname = _currentConfig.Hostname,
-                                localIp = _currentConfig.LocalIP,
-                                port = _currentConfig.Port,
-                                sshEnabled = _currentConfig.SshEnabled,
-                                rootLoginEnabled = _currentConfig.RootLoginEnabled,
-                                rootPasswordSet = _currentConfig.RootPasswordSet
-                            },
-                            savedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                        };
-
-                        string json = System.Text.Json.JsonSerializer.Serialize(configToSave, options);
-                        System.IO.File.WriteAllText(saveDialog.FileName, json, System.Text.Encoding.UTF8);
-
-                        MessageBox.Show(string.Format(Localization.GetString("MessageConfigSaved"), saveDialog.FileName), Localization.GetString("MessageTitleSuccess"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        DebugLogger.Log($"DownloadConfigMenuItem_Click: Konfigurace uložena do {saveDialog.FileName}");
+                        var json = System.Text.Json.JsonSerializer.Serialize(_currentConfig, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                        await System.IO.File.WriteAllTextAsync(saveDialog.FileName, json);
+                        MessageBox.Show("Konfigurace byla úspěšně uložena.", "Úspěch", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(string.Format(Localization.GetString("MessageConfigSaveError"), ex.Message), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        DebugLogger.Log($"DownloadConfigMenuItem_Click: Chyba při ukládání: {ex.Message}");
+                        MessageBox.Show($"Chyba při ukládání konfigurace: {ex.Message}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// Nahraje konfiguraci z JSON souboru a aplikuje ji na zařízení.
-        /// </summary>
         private async void UploadConfigMenuItem_Click(object? sender, EventArgs e)
         {
             if (_selectedDevice == null)
             {
-                MessageBox.Show(Localization.GetString("MessageSelectDevice"), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Nejprve vyberte zařízení.", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             using (var openDialog = new OpenFileDialog())
             {
                 openDialog.Filter = "JSON soubory (*.json)|*.json|Všechny soubory (*.*)|*.*";
-                openDialog.FilterIndex = 1;
-                openDialog.Title = "Nahrát konfiguraci";
+                openDialog.DefaultExt = "json";
 
                 if (openDialog.ShowDialog() == DialogResult.OK)
                 {
                     try
                     {
-                        string json = System.IO.File.ReadAllText(openDialog.FileName, System.Text.Encoding.UTF8);
-                        DebugLogger.Log($"UploadConfigMenuItem_Click: Načítám konfiguraci z {openDialog.FileName}");
-
-                        using (var doc = System.Text.Json.JsonDocument.Parse(json))
+                        var json = await System.IO.File.ReadAllTextAsync(openDialog.FileName);
+                        var config = System.Text.Json.JsonSerializer.Deserialize<DeviceConfig>(json);
+                        
+                        if (config == null)
                         {
-                            var root = doc.RootElement;
+                            MessageBox.Show("Nepodařilo se načíst konfiguraci ze souboru.", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+
+                        // Aplikujeme konfiguraci
+                        bool ipChanged = false;
+                        string? newIpAddress = null;
+                        string? oldIpAddress = _selectedDevice.IPAddress;
+
+                        // Změna hostname
+                        if (!string.IsNullOrWhiteSpace(config.Hostname) && config.Hostname != _currentConfig?.Hostname)
+                        {
+                            var response = await _client.SetHostnameAsync(_selectedDevice.IPAddress, config.Hostname);
+                            if (response.Status != "ok")
+                            {
+                                MessageBox.Show($"Chyba při nastavení hostname: {response.Error}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        // Změna SSH
+                        if (config.SshEnabled.HasValue && config.SshEnabled != _currentConfig?.SshEnabled)
+                        {
+                            var response = await _client.SetSshEnabledAsync(_selectedDevice.IPAddress, config.SshEnabled.Value);
+                            if (response.Status != "ok")
+                            {
+                                MessageBox.Show($"Chyba při nastavení SSH: {response.Error}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        // Změna root login
+                        if (config.RootLoginEnabled.HasValue && config.RootLoginEnabled != _currentConfig?.RootLoginEnabled)
+                        {
+                            var response = await _client.SetRootLoginAsync(_selectedDevice.IPAddress, config.RootLoginEnabled.Value);
+                            if (response.Status != "ok")
+                            {
+                                MessageBox.Show($"Chyba při nastavení root loginu: {response.Error}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        // Změna statické IP (musí být poslední, protože restartuje zařízení)
+                        // Zkontrolujeme, zda máme statickou IP v aktuální konfiguraci
+                        string? staticIp = _staticIpTextBox.Text.Trim();
+                        string? netmask = _netmaskTextBox.Text.Trim();
+                        string? gateway = _gatewayTextBox.Text.Trim();
+                        
+                        if (!string.IsNullOrWhiteSpace(config.LocalIP) && 
+                            config.LocalIP != _currentConfig?.LocalIP &&
+                            !string.IsNullOrWhiteSpace(netmask))
+                        {
+                            ipChanged = true;
+                            newIpAddress = config.LocalIP;
+                            var response = await _client.SetStaticIpAsync(
+                                _selectedDevice.IPAddress,
+                                config.LocalIP,
+                                netmask,
+                                gateway);
                             
-                            // Zkusíme najít device objekt
-                            if (root.TryGetProperty("device", out var deviceElement))
+                            if (response.Status != "ok")
                             {
-                                root = deviceElement;
-                            }
-
-                            // Načteme hodnoty z JSON
-                            string? hostname = root.TryGetProperty("hostname", out var h) ? h.GetString() : null;
-                            string? localIp = root.TryGetProperty("localIp", out var ip) ? ip.GetString() : null;
-                            bool? sshEnabled = root.TryGetProperty("sshEnabled", out var ssh) ? ssh.GetBoolean() : null;
-                            bool? rootLoginEnabled = root.TryGetProperty("rootLoginEnabled", out var rootLogin) ? rootLogin.GetBoolean() : null;
-
-                            _statusLabel.Text = "Nahrávám konfiguraci ze souboru...";
-                            _statusLabel.ForeColor = Color.Blue;
-
-                            // Aplikujeme konfiguraci
-                            bool success = true;
-                            string errorMessage = "";
-
-                            // Hostname
-                            if (!string.IsNullOrEmpty(hostname))
-                            {
-                                var response = await _client.SetHostnameAsync(_selectedDevice.IPAddress, hostname);
-                                if (response.Status != "ok")
-                                {
-                                    success = false;
-                                    errorMessage += $"Hostname: {response.Error}; ";
-                                }
-                            }
-
-                            // SSH
-                            if (sshEnabled.HasValue)
-                            {
-                                var response = await _client.SetSshEnabledAsync(_selectedDevice.IPAddress, sshEnabled.Value);
-                                if (response.Status != "ok")
-                                {
-                                    success = false;
-                                    errorMessage += $"SSH: {response.Error}; ";
-                                }
-                            }
-
-                            // Root login
-                            if (rootLoginEnabled.HasValue)
-                            {
-                                var response = await _client.SetRootLoginAsync(_selectedDevice.IPAddress, rootLoginEnabled.Value);
-                                if (response.Status != "ok")
-                                {
-                                    success = false;
-                                    errorMessage += $"Root login: {response.Error}; ";
-                                }
-                            }
-
-                            // Statická IP
-                            string? oldIpForUpload = null;
-                            string? newIpForUpload = null;
-                            if (!string.IsNullOrEmpty(localIp) && localIp != _currentConfig?.LocalIP)
-                            {
-                                oldIpForUpload = _selectedDevice.IPAddress;
-                                newIpForUpload = localIp;
-                                string netmask = "255.255.255.0"; // Výchozí
-                                string? gateway = null;
-
-                                var response = await _client.SetStaticIpAsync(
-                                    _selectedDevice.IPAddress,
-                                    localIp,
-                                    netmask,
-                                    gateway
-                                );
-                                
-                                // Při změně statické IP se zařízení restartuje, takže timeout je očekávaný
-                                // Pokud je timeout, považujeme to za úspěch (požadavek byl odeslán)
-                                if (response.Status != "ok")
-                                {
-                                    // Pokud je timeout při změně IP, považujeme to za úspěch (zařízení se restartuje)
-                                    if (response.Error != null && response.Error.Contains("Timeout"))
-                                    {
-                                        DebugLogger.Log($"UploadConfigMenuItem_Click: Timeout při změně statické IP - to je očekávané, zařízení se restartuje. Považuji za úspěch.");
-                                        // Považujeme to za úspěch, protože požadavek byl odeslán a zařízení se restartuje
-                                    }
-                                    else
-                                    {
-                                        // Jiná chyba než timeout - skutečná chyba
-                                        success = false;
-                                        errorMessage += $"Statická IP: {response.Error}; ";
-                                        newIpForUpload = null; // Nebudeme aktualizovat IP, pokud nastavení selhalo
-                                    }
-                                }
-                            }
-
-                            if (success)
-                            {
-                                // Pokud se změnila IP adresa, spustíme hledání zařízení na nové IP
-                                if (newIpForUpload != null && oldIpForUpload != null && newIpForUpload != oldIpForUpload)
-                                {
-                                    DebugLogger.Log($"UploadConfigMenuItem_Click: IP adresa se změnila z {oldIpForUpload} na {newIpForUpload}. Spouštím hledání zařízení na nové IP.");
-                                    
-                                    // Spustíme hledání zařízení na nové IP a podle hostname během 60 sekund
-                                    string savedHostname = _selectedDevice?.Hostname ?? "";
-                                    await FindDeviceAfterIpChangeAsync(savedHostname, newIpForUpload);
-                                }
-                                else
-                                {
-                                    _statusLabel.Text = "Konfigurace byla úspěšně nahrána. Načítám aktualizovanou konfiguraci...";
-                                    _statusLabel.ForeColor = Color.Green;
-                                    
-                                    // Načteme aktualizovanou konfiguraci
-                                    await LoadDeviceConfigAsync();
-                                }
-                                
-                                MessageBox.Show(Localization.GetString("MessageConfigUploaded"), Localization.GetString("MessageTitleSuccess"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                MessageBox.Show($"Chyba při nastavení statické IP: {response.Error}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                ipChanged = false;
                             }
                             else
                             {
-                                _statusLabel.Text = string.Format(Localization.GetString("MessageConfigUploadError"), errorMessage);
-                                _statusLabel.ForeColor = Color.Red;
-                                MessageBox.Show(string.Format(Localization.GetString("MessageConfigUploadError"), errorMessage), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                // Aktualizujeme IP adresu v _selectedDevice
+                                _selectedDevice.IPAddress = newIpAddress;
+                                _currentConfig = config;
+                                _currentConfig.LocalIP = newIpAddress;
                             }
                         }
-                    }
-                    catch (System.Text.Json.JsonException ex)
-                    {
-                        MessageBox.Show(string.Format(Localization.GetString("MessageJsonParseError"), ex.Message), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        DebugLogger.Log($"UploadConfigMenuItem_Click: Chyba parsování JSON: {ex.Message}");
+
+                        if (ipChanged && !string.IsNullOrEmpty(newIpAddress))
+                        {
+                            // Spustíme hledání zařízení na nové IP adrese
+                            _statusLabel.Text = $"IP adresa se mění na {newIpAddress}. Hledám zařízení...";
+                            _statusLabel.ForeColor = Color.Blue;
+                            
+                            // Použijeme FindDeviceAfterIpChangeAsync pokud existuje, jinak jednodušší metodu
+                            await Task.Delay(3000); // Počkáme 3 sekundy na restart
+                            
+                            // Zkusíme načíst konfiguraci z nové IP
+                            try
+                            {
+                                var newConfig = await _client.GetConfigAsync(newIpAddress);
+                                if (newConfig != null)
+                                {
+                                    _currentConfig = newConfig;
+                                    UpdateConfigDisplay();
+                                    _statusLabel.Text = $"Konfigurace byla úspěšně nahrána a IP adresa změněna na {newIpAddress}!";
+                                    _statusLabel.ForeColor = Color.Green;
+                                    MessageBox.Show($"Konfigurace byla úspěšně nahrána. IP adresa byla změněna na {newIpAddress}.", "Úspěch", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                }
+                            }
+                            catch
+                            {
+                                _statusLabel.Text = $"Konfigurace nahrána, ale zařízení ještě není dostupné na nové IP {newIpAddress}.";
+                                _statusLabel.ForeColor = Color.Orange;
+                            }
+                        }
+                        else
+                        {
+                            // Načteme aktualizovanou konfiguraci
+                            await LoadDeviceConfigAsync();
+                            MessageBox.Show("Konfigurace byla úspěšně nahrána.", "Úspěch", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(string.Format(Localization.GetString("MessageConfigUploadError"), ex.Message), Localization.GetString("MessageTitleError"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        DebugLogger.Log($"UploadConfigMenuItem_Click: Chyba: {ex.Message}");
+                        MessageBox.Show($"Chyba při nahrávání konfigurace: {ex.Message}", "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
-            }
-        }
-
-        /// <summary>
-        /// Načte uloženou konfiguraci při startu aplikace a automaticky načte nastavení.
-        /// </summary>
-        private async void LoadSavedConfigOnStartup()
-        {
-            try
-            {
-                string configPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "DeviceConfigurator",
-                    "last_config.json"
-                );
-
-                if (System.IO.File.Exists(configPath))
-                {
-                    DebugLogger.Log($"LoadSavedConfigOnStartup: Načítám uloženou konfiguraci z {configPath}");
-                    
-                    string json = System.IO.File.ReadAllText(configPath, System.Text.Encoding.UTF8);
-
-                    using (var doc = System.Text.Json.JsonDocument.Parse(json))
-                    {
-                        var root = doc.RootElement;
-                        
-                        JsonElement deviceElement;
-                        if (root.TryGetProperty("device", out deviceElement))
-                        {
-                            root = deviceElement;
-                        }
-
-                        // Načteme IP adresu pro automatické připojení
-                        string? ipAddress = root.TryGetProperty("ipAddress", out var ip) ? ip.GetString() : null;
-                        string? hostname = root.TryGetProperty("hostname", out var h) ? h.GetString() : null;
-
-                        if (!string.IsNullOrEmpty(ipAddress))
-                        {
-                            DebugLogger.Log($"LoadSavedConfigOnStartup: Nalezena uložená IP adresa: {ipAddress}, hostname: {hostname}");
-                            
-                            // Vytvoříme dočasné zařízení pro automatické načtení
-                            var savedDevice = new NetworkDevice
-                            {
-                                IPAddress = ipAddress,
-                                Hostname = hostname ?? "",
-                                Status = "OK"
-                            };
-                            
-                            _selectedDevice = savedDevice;
-                            
-                            // Automaticky načteme konfiguraci
-                            _statusLabel.Text = $"Načítám konfiguraci z uloženého zařízení {ipAddress}...";
-                            await LoadDeviceConfigAsync();
-                            
-                            // Přidáme zařízení do seznamu
-                            _devicesListBox.Items.Add(savedDevice);
-                            _devicesListBox.SelectedItem = savedDevice;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                DebugLogger.Log($"LoadSavedConfigOnStartup: Chyba při načítání uložené konfigurace: {ex.Message}");
-                // Chyba při načítání není kritická, pokračujeme normálně
             }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             StopIpPolling();
-            
-            // Uložíme aktuální konfiguraci při ukončení
-            if (_currentConfig != null && _selectedDevice != null)
+            StopStatusCheck();
+            base.OnFormClosing(e);
+        }
+
+        private async void DevicesTreeView_DownloadConfig(object? sender, EventArgs e)
+        {
+            if (_currentConfig == null || _selectedDevice == null)
             {
-                try
+                MessageBox.Show(
+                    Localization.GetString("SelectDeviceAndLoadConfig"),
+                    Localization.GetString("Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (var saveDialog = new SaveFileDialog())
+            {
+                saveDialog.Filter = "JSON soubory (*.json)|*.json|Všechny soubory (*.*)|*.*";
+                saveDialog.FileName = $"config_{_selectedDevice.Hostname}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+                saveDialog.DefaultExt = "json";
+
+                if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
-                    string configDir = System.IO.Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "DeviceConfigurator"
-                    );
-                    
-                    if (!System.IO.Directory.Exists(configDir))
+                    try
                     {
-                        System.IO.Directory.CreateDirectory(configDir);
+                        var json = System.Text.Json.JsonSerializer.Serialize(_currentConfig, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                        await System.IO.File.WriteAllTextAsync(saveDialog.FileName, json);
+                        MessageBox.Show(
+                            Localization.GetString("ConfigSaved"),
+                            Localization.GetString("Success"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information);
                     }
-                    
-                    string configPath = System.IO.Path.Combine(configDir, "last_config.json");
-                    
-                    var options = new System.Text.Json.JsonSerializerOptions
+                    catch (Exception ex)
                     {
-                        WriteIndented = true,
-                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-                    };
-
-                    var configToSave = new
-                    {
-                        device = new
-                        {
-                            ipAddress = _selectedDevice.IPAddress,
-                            hostname = _currentConfig.Hostname,
-                            localIp = _currentConfig.LocalIP,
-                            port = _currentConfig.Port,
-                            sshEnabled = _currentConfig.SshEnabled,
-                            rootLoginEnabled = _currentConfig.RootLoginEnabled,
-                            rootPasswordSet = _currentConfig.RootPasswordSet
-                        },
-                        savedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                    };
-
-                    string json = System.Text.Json.JsonSerializer.Serialize(configToSave, options);
-                    System.IO.File.WriteAllText(configPath, json, System.Text.Encoding.UTF8);
-                    DebugLogger.Log($"OnFormClosing: Konfigurace uložena do {configPath}");
-                }
-                catch (Exception ex)
-                {
-                    DebugLogger.Log($"OnFormClosing: Chyba při ukládání konfigurace: {ex.Message}");
+                        MessageBox.Show(
+                            $"Chyba při ukládání konfigurace: {ex.Message}",
+                            Localization.GetString("Error"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
                 }
             }
-            
-            base.OnFormClosing(e);
+        }
+
+        private async void DevicesTreeView_UploadConfig(object? sender, EventArgs e)
+        {
+            if (_selectedDevice == null)
+            {
+                MessageBox.Show(
+                    Localization.GetString("SelectDeviceFirst"),
+                    Localization.GetString("Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (var openDialog = new OpenFileDialog())
+            {
+                openDialog.Filter = "JSON soubory (*.json)|*.json|Všechny soubory (*.*)|*.*";
+                openDialog.DefaultExt = "json";
+
+                if (openDialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        var json = await System.IO.File.ReadAllTextAsync(openDialog.FileName);
+                        var config = System.Text.Json.JsonSerializer.Deserialize<DeviceConfig>(json);
+                        
+                        if (config == null)
+                        {
+                            MessageBox.Show(
+                                "Nepodařilo se načíst konfiguraci ze souboru.",
+                                Localization.GetString("Error"),
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+                            return;
+                        }
+
+                        // Aplikujeme konfiguraci
+                        bool ipChanged = false;
+                        string? newIpAddress = null;
+                        string? oldIpAddress = _selectedDevice.IPAddress;
+
+                        // Změna hostname
+                        if (!string.IsNullOrWhiteSpace(config.Hostname) && config.Hostname != _currentConfig?.Hostname)
+                        {
+                            var response = await _client.SetHostnameAsync(_selectedDevice.IPAddress, config.Hostname);
+                            if (response.Status != "ok")
+                            {
+                                MessageBox.Show(
+                                    $"Chyba při nastavení hostname: {response.Error}",
+                                    Localization.GetString("Error"),
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        // Změna SSH
+                        if (config.SshEnabled.HasValue && config.SshEnabled != _currentConfig?.SshEnabled)
+                        {
+                            var response = await _client.SetSshEnabledAsync(_selectedDevice.IPAddress, config.SshEnabled.Value);
+                            if (response.Status != "ok")
+                            {
+                                MessageBox.Show(
+                                    $"Chyba při nastavení SSH: {response.Error}",
+                                    Localization.GetString("Error"),
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        // Změna root login
+                        if (config.RootLoginEnabled.HasValue && config.RootLoginEnabled != _currentConfig?.RootLoginEnabled)
+                        {
+                            var response = await _client.SetRootLoginAsync(_selectedDevice.IPAddress, config.RootLoginEnabled.Value);
+                            if (response.Status != "ok")
+                            {
+                                MessageBox.Show(
+                                    $"Chyba při nastavení root loginu: {response.Error}",
+                                    Localization.GetString("Error"),
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        // Změna statické IP
+                        if (!string.IsNullOrWhiteSpace(config.StaticIP) && config.StaticIP != _currentConfig?.StaticIP)
+                        {
+                            string netmask = config.Netmask ?? "255.255.255.0";
+                            var response = await _client.SetStaticIpAsync(
+                                _selectedDevice.IPAddress,
+                                config.StaticIP,
+                                netmask,
+                                config.Gateway
+                            );
+                            if (response.Status == "ok")
+                            {
+                                ipChanged = true;
+                                newIpAddress = config.StaticIP;
+                            }
+                            else
+                            {
+                                MessageBox.Show(
+                                    $"Chyba při nastavení statické IP: {response.Error}",
+                                    Localization.GetString("Error"),
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning);
+                            }
+                        }
+
+                        if (ipChanged && newIpAddress != null && oldIpAddress != null)
+                        {
+                            _statusLabel.Text = $"Konfigurace nahrána. Čekám na změnu IP adresy na {newIpAddress}...";
+                            StartIpPolling(oldIpAddress, newIpAddress);
+                        }
+                        else
+                        {
+                            MessageBox.Show(
+                                Localization.GetString("ConfigLoadedFromFile"),
+                                Localization.GetString("Success"),
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information);
+                            await LoadDeviceConfigAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(
+                            $"Chyba při nahrávání konfigurace: {ex.Message}",
+                            Localization.GetString("Error"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private async void DevicesTreeView_ChangeRootPassword(object? sender, EventArgs e)
+        {
+            if (_selectedDevice == null)
+            {
+                MessageBox.Show(
+                    Localization.GetString("SelectDeviceFirst"),
+                    Localization.GetString("Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (var dialog = new ChangeRootPasswordDialog())
+            {
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    try
+                    {
+                        _statusLabel.Text = Localization.GetString("ChangingRootPassword");
+                        _statusLabel.ForeColor = Color.Blue;
+
+                        var response = await _client.SetRootPasswordAsync(_selectedDevice.IPAddress, dialog.NewRootPassword);
+
+                        if (response.Status == "ok")
+                        {
+                            _statusLabel.Text = Localization.GetString("RootPasswordChanged");
+                            _statusLabel.ForeColor = Color.Green;
+                            MessageBox.Show(
+                                Localization.GetString("RootPasswordChanged"),
+                                Localization.GetString("Success"),
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information);
+                            
+                            // Obnovit konfiguraci
+                            await LoadDeviceConfigAsync();
+                        }
+                        else
+                        {
+                            _statusLabel.Text = string.Format(Localization.GetString("ErrorChangingRootPassword"), response.Error);
+                            _statusLabel.ForeColor = Color.Red;
+                            MessageBox.Show(
+                                string.Format(Localization.GetString("ErrorChangingRootPassword"), response.Error),
+                                Localization.GetString("Error"),
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.Log($"DevicesTreeView_ChangeRootPassword: Chyba: {ex.Message}");
+                        _statusLabel.Text = string.Format(Localization.GetString("ErrorChangingRootPassword"), ex.Message);
+                        _statusLabel.ForeColor = Color.Red;
+                        MessageBox.Show(
+                            string.Format(Localization.GetString("ErrorChangingRootPassword"), ex.Message),
+                            Localization.GetString("Error"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                }
+            }
         }
     }
 }

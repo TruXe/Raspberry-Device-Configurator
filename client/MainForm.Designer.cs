@@ -17,12 +17,15 @@ namespace DeviceConfigurator
         private GroupBox _editGroupBox;
         
         // Seznam zařízení
-        private ListBox _devicesListBox;
+        private TreeView _devicesTreeView;
+        private ImageList _devicesImageList;
         private Label _devicesLabel;
         
         // Skenování
         private Label _ipRangeLabel;
         private TextBox _ipRangeTextBox;
+        private Label _hostnameScanLabel;
+        private TextBox _hostnameScanTextBox;
         private Button _scanRangeButton;
         private Button _scanButton;
         private Button _refreshButton;
@@ -58,10 +61,11 @@ namespace DeviceConfigurator
         // Status
         private Label _statusLabel;
         private Panel _statusPanel;
-        private ProgressBar _scanProgressBar;
         
         // Menu
         private MenuStrip _mainMenuStrip;
+        private ToolStripMenuItem _raspberryMenu;
+        private ToolStripMenuItem _serversMenuItem;
         private ToolStripMenuItem _configMenu;
         private ToolStripMenuItem _downloadConfigMenuItem;
         private ToolStripMenuItem _uploadConfigMenuItem;
@@ -94,67 +98,58 @@ namespace DeviceConfigurator
 
             // Formulář
             this.Text = "Device Configurator - Raspberry Pi";
-            this.Size = new Size(1000, 800);
+            this.Size = new Size(900, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.Sizable;
-            this.MinimumSize = new Size(900, 700);
+            this.MinimumSize = new Size(800, 650);
             this.BackColor = SystemColors.Control;
 
             // ========== MENU STRIP ==========
             _mainMenuStrip = new MenuStrip();
-            _mainMenuStrip.Location = new Point(0, 0);
-            _mainMenuStrip.Size = new Size(1000, 24);
-            _mainMenuStrip.Text = "mainMenuStrip";
-            _mainMenuStrip.Dock = DockStyle.Top;
             
-            // Config menu
-            _configMenu = new ToolStripMenuItem();
-            _configMenu.Text = "Config";
-            _configMenu.Size = new Size(50, 20);
+            _raspberryMenu = new ToolStripMenuItem("Raspberry");
             
-            // Download config
-            _downloadConfigMenuItem = new ToolStripMenuItem();
-            _downloadConfigMenuItem.Text = "Stáhnout konfiguraci";
-            _downloadConfigMenuItem.Size = new Size(200, 22);
+            _serversMenuItem = new ToolStripMenuItem("Servery");
+            _serversMenuItem.Click += ServersMenuItem_Click;
+            _raspberryMenu.DropDownItems.Add(_serversMenuItem);
             
-            // Upload config
-            _uploadConfigMenuItem = new ToolStripMenuItem();
-            _uploadConfigMenuItem.Text = "Nahrát konfiguraci";
-            _uploadConfigMenuItem.Size = new Size(200, 22);
+            _configMenu = new ToolStripMenuItem("Config");
+            _configMenu.ToolTipText = "Nahrávání a stahování konfigurace";
             
+            _downloadConfigMenuItem = new ToolStripMenuItem("Stáhnout konfiguraci");
+            _downloadConfigMenuItem.Click += DownloadConfigMenuItem_Click;
             _configMenu.DropDownItems.Add(_downloadConfigMenuItem);
+            
+            _uploadConfigMenuItem = new ToolStripMenuItem("Nahrát konfiguraci");
+            _uploadConfigMenuItem.Click += UploadConfigMenuItem_Click;
             _configMenu.DropDownItems.Add(_uploadConfigMenuItem);
-            _mainMenuStrip.Items.Add(_configMenu);
             
-            // Language menu
-            _languageMenu = new ToolStripMenuItem();
-            _languageMenu.Text = "Jazyk"; // Bude aktualizováno v UpdateLanguageUI
-            _languageMenu.Size = new Size(60, 20);
+            _languageMenu = new ToolStripMenuItem("Language");
+            _languageMenu.ToolTipText = "Nastavení jazyka programu";
             
-            // Czech
-            _languageCzechMenuItem = new ToolStripMenuItem();
-            _languageCzechMenuItem.Text = "Čeština"; // Bude aktualizováno v UpdateLanguageUI
-            _languageCzechMenuItem.Size = new Size(150, 22);
-            
-            // English
-            _languageEnglishMenuItem = new ToolStripMenuItem();
-            _languageEnglishMenuItem.Text = "English"; // Bude aktualizováno v UpdateLanguageUI
-            _languageEnglishMenuItem.Size = new Size(150, 22);
-            
+            _languageCzechMenuItem = new ToolStripMenuItem("Čeština");
+            _languageCzechMenuItem.Click += LanguageCzechMenuItem_Click;
             _languageMenu.DropDownItems.Add(_languageCzechMenuItem);
+            
+            _languageEnglishMenuItem = new ToolStripMenuItem("English");
+            _languageEnglishMenuItem.Click += LanguageEnglishMenuItem_Click;
             _languageMenu.DropDownItems.Add(_languageEnglishMenuItem);
+            
+            _mainMenuStrip.Items.Add(_raspberryMenu);
+            _mainMenuStrip.Items.Add(_configMenu);
             _mainMenuStrip.Items.Add(_languageMenu);
-            
+            _mainMenuStrip.Dock = DockStyle.Top;
             this.MainMenuStrip = _mainMenuStrip;
-            
+            this.Controls.Add(_mainMenuStrip);
+
             // ========== LEVÁ STRANA - SEZNAM ZAŘÍZENÍ A SKENOVÁNÍ ==========
             
             // GroupBox pro seznam zařízení
             _devicesGroupBox = new GroupBox
             {
                 Text = "Nalezená zařízení",
-                Location = new Point(12, 28), // Posunuto dolů o 24px pro menu
-                Size = new Size(360, 320),
+                Location = new Point(12, 35),
+                Size = new Size(320, 270),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left
             };
 
@@ -167,15 +162,77 @@ namespace DeviceConfigurator
             };
             _devicesGroupBox.Controls.Add(_devicesLabel);
 
-            _devicesListBox = new ListBox
+            // ImageList pro status indikátory
+            _devicesImageList = new ImageList
+            {
+                ImageSize = new Size(16, 16),
+                ColorDepth = ColorDepth.Depth32Bit
+            };
+            
+            // Vytvoření zelené tečky (online)
+            Bitmap greenDot = new Bitmap(16, 16);
+            using (Graphics g = Graphics.FromImage(greenDot))
+            {
+                g.Clear(Color.Transparent);
+                g.FillEllipse(new SolidBrush(Color.Green), 2, 2, 12, 12);
+            }
+            _devicesImageList.Images.Add("online", greenDot);
+
+            // Vytvoření červené tečky (offline)
+            Bitmap redDot = new Bitmap(16, 16);
+            using (Graphics g = Graphics.FromImage(redDot))
+            {
+                g.Clear(Color.Transparent);
+                g.FillEllipse(new SolidBrush(Color.Red), 2, 2, 12, 12);
+            }
+            _devicesImageList.Images.Add("offline", redDot);
+
+            // Vytvoření žluté/oranžové tečky (ping OK, ale port 7777 nedostupný)
+            Bitmap yellowDot = new Bitmap(16, 16);
+            using (Graphics g = Graphics.FromImage(yellowDot))
+            {
+                g.Clear(Color.Transparent);
+                g.FillEllipse(new SolidBrush(Color.Orange), 2, 2, 12, 12);
+            }
+            _devicesImageList.Images.Add("warning", yellowDot);
+
+            // Context menu pro TreeView
+            ContextMenuStrip devicesContextMenu = new ContextMenuStrip();
+            ToolStripMenuItem downloadConfigMenuItem = new ToolStripMenuItem
+            {
+                Text = Localization.GetString("DownloadConfigMenu")
+            };
+            downloadConfigMenuItem.Click += DevicesTreeView_DownloadConfig;
+            devicesContextMenu.Items.Add(downloadConfigMenuItem);
+
+            ToolStripMenuItem uploadConfigMenuItem = new ToolStripMenuItem
+            {
+                Text = Localization.GetString("UploadConfigMenu")
+            };
+            uploadConfigMenuItem.Click += DevicesTreeView_UploadConfig;
+            devicesContextMenu.Items.Add(uploadConfigMenuItem);
+
+            ToolStripMenuItem changeRootPasswordMenuItem = new ToolStripMenuItem
+            {
+                Text = Localization.GetString("ChangeRootPasswordMenu")
+            };
+            changeRootPasswordMenuItem.Click += DevicesTreeView_ChangeRootPassword;
+            devicesContextMenu.Items.Add(changeRootPasswordMenuItem);
+
+            _devicesTreeView = new TreeView
             {
                 Location = new Point(10, 45),
-                Size = new Size(340, 265),
+                Size = new Size(300, 225),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Font = new Font("Consolas", 9F)
+                Font = new Font("Consolas", 9F),
+                ImageList = _devicesImageList,
+                ShowLines = true,
+                ShowRootLines = false,
+                ShowPlusMinus = false,
+                ContextMenuStrip = devicesContextMenu
             };
-            _devicesListBox.SelectedIndexChanged += DevicesListBox_SelectedIndexChanged;
-            _devicesGroupBox.Controls.Add(_devicesListBox);
+            _devicesTreeView.AfterSelect += DevicesTreeView_AfterSelect;
+            _devicesGroupBox.Controls.Add(_devicesTreeView);
 
             this.Controls.Add(_devicesGroupBox);
 
@@ -183,8 +240,8 @@ namespace DeviceConfigurator
             _scanGroupBox = new GroupBox
             {
                 Text = "Skenování sítě",
-                Location = new Point(12, 360),
-                Size = new Size(360, 160),
+                Location = new Point(12, 323),
+                Size = new Size(320, 200),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
 
@@ -201,7 +258,7 @@ namespace DeviceConfigurator
             _ipRangeTextBox = new TextBox
             {
                 Location = new Point(10, 48),
-                Size = new Size(240, 23),
+                Size = new Size(200, 23),
                 Text = "192.168.0.1-255",
                 Font = new Font("Consolas", 9F)
             };
@@ -210,19 +267,37 @@ namespace DeviceConfigurator
             _scanRangeButton = new Button
             {
                 Text = "Skenovat rozsah",
-                Location = new Point(258, 46),
+                Location = new Point(218, 46),
                 Size = new Size(92, 25),
                 UseVisualStyleBackColor = true
             };
             _scanRangeButton.Click += ScanRangeButton_Click;
             _scanGroupBox.Controls.Add(_scanRangeButton);
 
+            // Hostname pro skenování
+            _hostnameScanLabel = new Label
+            {
+                Text = "Hostname:",
+                Location = new Point(10, 80),
+                Size = new Size(100, 20),
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
+            };
+            _scanGroupBox.Controls.Add(_hostnameScanLabel);
+
+            _hostnameScanTextBox = new TextBox
+            {
+                Location = new Point(10, 103),
+                Size = new Size(200, 23),
+                Font = new Font("Segoe UI", 9F)
+            };
+            _scanGroupBox.Controls.Add(_hostnameScanTextBox);
+
             // Tlačítka pro skenování
             _scanButton = new Button
             {
                 Text = "Skenovat podle hostname",
-                Location = new Point(10, 80),
-                Size = new Size(170, 30),
+                Location = new Point(10, 135),
+                Size = new Size(300, 30),
                 UseVisualStyleBackColor = true
             };
             _scanButton.Click += ScanButton_Click;
@@ -231,8 +306,8 @@ namespace DeviceConfigurator
             _refreshButton = new Button
             {
                 Text = "Obnovit konfiguraci",
-                Location = new Point(188, 80),
-                Size = new Size(162, 30),
+                Location = new Point(218, 103),
+                Size = new Size(92, 25),
                 Enabled = false,
                 UseVisualStyleBackColor = true
             };
@@ -243,8 +318,8 @@ namespace DeviceConfigurator
             _debugConsoleButton = new Button
             {
                 Text = "Debug Console",
-                Location = new Point(10, 120),
-                Size = new Size(340, 25),
+                Location = new Point(10, 170),
+                Size = new Size(300, 25),
                 UseVisualStyleBackColor = true,
                 BackColor = Color.LightGray
             };
@@ -259,8 +334,8 @@ namespace DeviceConfigurator
             _configGroupBox = new GroupBox
             {
                 Text = "Aktuální konfigurace",
-                Location = new Point(380, 28), // Posunuto dolů o 24px pro menu
-                Size = new Size(600, 200),
+                Location = new Point(340, 35),
+                Size = new Size(540, 200),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
 
@@ -278,7 +353,7 @@ namespace DeviceConfigurator
             {
                 Text = "-",
                 Location = new Point(140, 25),
-                Size = new Size(440, 20),
+                Size = new Size(380, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 ForeColor = SystemColors.ControlText
             };
@@ -299,7 +374,7 @@ namespace DeviceConfigurator
             {
                 Text = "-",
                 Location = new Point(140, 50),
-                Size = new Size(440, 20),
+                Size = new Size(380, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
             _configGroupBox.Controls.Add(hostnameValueLabel);
@@ -319,7 +394,7 @@ namespace DeviceConfigurator
             {
                 Text = "-",
                 Location = new Point(140, 75),
-                Size = new Size(440, 20),
+                Size = new Size(380, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
             _configGroupBox.Controls.Add(portValueLabel);
@@ -339,7 +414,7 @@ namespace DeviceConfigurator
             {
                 Text = "-",
                 Location = new Point(140, 100),
-                Size = new Size(440, 20),
+                Size = new Size(380, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
             _configGroupBox.Controls.Add(sshValueLabel);
@@ -359,7 +434,7 @@ namespace DeviceConfigurator
             {
                 Text = "-",
                 Location = new Point(140, 125),
-                Size = new Size(440, 20),
+                Size = new Size(380, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
             _configGroupBox.Controls.Add(rootLoginValueLabel);
@@ -379,7 +454,7 @@ namespace DeviceConfigurator
             {
                 Text = "-",
                 Location = new Point(140, 150),
-                Size = new Size(440, 20),
+                Size = new Size(380, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
             _configGroupBox.Controls.Add(rootPasswordValueLabel);
@@ -391,8 +466,8 @@ namespace DeviceConfigurator
             _editGroupBox = new GroupBox
             {
                 Text = "Úprava konfigurace",
-                Location = new Point(380, 236), // Posunuto dolů o 24px pro menu
-                Size = new Size(600, 450),
+                Location = new Point(340, 243),
+                Size = new Size(540, 480),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
 
@@ -409,7 +484,7 @@ namespace DeviceConfigurator
             _hostnameTextBox = new TextBox
             {
                 Location = new Point(15, 55),
-                Size = new Size(570, 23),
+                Size = new Size(510, 23),
                 Font = new Font("Segoe UI", 9F)
             };
             _editGroupBox.Controls.Add(_hostnameTextBox);
@@ -427,7 +502,7 @@ namespace DeviceConfigurator
             _usernameTextBox = new TextBox
             {
                 Location = new Point(15, 115),
-                Size = new Size(570, 23),
+                Size = new Size(510, 23),
                 Font = new Font("Segoe UI", 9F)
             };
             _editGroupBox.Controls.Add(_usernameTextBox);
@@ -445,7 +520,7 @@ namespace DeviceConfigurator
             _passwordTextBox = new TextBox
             {
                 Location = new Point(15, 175),
-                Size = new Size(570, 23),
+                Size = new Size(510, 23),
                 PasswordChar = '*',
                 Font = new Font("Segoe UI", 9F)
             };
@@ -464,7 +539,7 @@ namespace DeviceConfigurator
             _rootPasswordTextBox = new TextBox
             {
                 Location = new Point(15, 235),
-                Size = new Size(570, 23),
+                Size = new Size(510, 23),
                 PasswordChar = '*',
                 Font = new Font("Segoe UI", 9F)
             };
@@ -483,7 +558,7 @@ namespace DeviceConfigurator
             _staticIpTextBox = new TextBox
             {
                 Location = new Point(15, 295),
-                Size = new Size(280, 23),
+                Size = new Size(250, 23),
                 Font = new Font("Consolas", 9F)
             };
             _editGroupBox.Controls.Add(_staticIpTextBox);
@@ -492,7 +567,7 @@ namespace DeviceConfigurator
             _netmaskLabel = new Label
             {
                 Text = "Maska sítě:",
-                Location = new Point(305, 270),
+                Location = new Point(275, 270),
                 Size = new Size(100, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
@@ -500,8 +575,8 @@ namespace DeviceConfigurator
 
             _netmaskTextBox = new TextBox
             {
-                Location = new Point(305, 295),
-                Size = new Size(130, 23),
+                Location = new Point(275, 295),
+                Size = new Size(120, 23),
                 Font = new Font("Consolas", 9F),
                 Text = "255.255.255.0"
             };
@@ -511,16 +586,16 @@ namespace DeviceConfigurator
             _gatewayLabel = new Label
             {
                 Text = "Brána (Gateway):",
-                Location = new Point(445, 270),
-                Size = new Size(140, 20),
+                Location = new Point(405, 270),
+                Size = new Size(120, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
             _editGroupBox.Controls.Add(_gatewayLabel);
 
             _gatewayTextBox = new TextBox
             {
-                Location = new Point(445, 295),
-                Size = new Size(140, 23),
+                Location = new Point(405, 295),
+                Size = new Size(120, 23),
                 Font = new Font("Consolas", 9F)
             };
             _editGroupBox.Controls.Add(_gatewayTextBox);
@@ -550,7 +625,7 @@ namespace DeviceConfigurator
             {
                 Text = "Uložit změny",
                 Location = new Point(15, 400),
-                Size = new Size(570, 40),
+                Size = new Size(510, 40),
                 Enabled = false,
                 UseVisualStyleBackColor = true,
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
@@ -568,8 +643,9 @@ namespace DeviceConfigurator
             
             _statusPanel = new Panel
             {
-                Dock = DockStyle.Bottom,
-                Height = 30,
+                Location = new Point(0, 710),
+                Size = new Size(900, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = SystemColors.ControlDark,
                 BorderStyle = BorderStyle.FixedSingle
             };
@@ -578,36 +654,15 @@ namespace DeviceConfigurator
             {
                 Text = "Připraveno. Zadejte IP rozsah nebo klikněte na 'Skenovat síť' pro začátek.",
                 Location = new Point(10, 5),
-                Size = new Size(980, 20),
+                Size = new Size(880, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 ForeColor = SystemColors.ControlText,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top | AnchorStyles.Bottom
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             _statusPanel.Controls.Add(_statusLabel);
             this.Controls.Add(_statusPanel);
 
-            // ========== PROGRESS BAR (DOCKED AT BOTTOM, ABOVE STATUS BAR) ==========
-            
-            _scanProgressBar = new ProgressBar
-            {
-                Dock = DockStyle.Bottom,
-                Height = 25,
-                Style = ProgressBarStyle.Continuous,
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                Visible = false
-            };
-            this.Controls.Add(_scanProgressBar);
-            
-            // Důležité: Progress bar musí být přidán po status panelu, aby byl nad ním
-            this.Controls.SetChildIndex(_scanProgressBar, 0);
-            this.Controls.SetChildIndex(_statusPanel, 1);
-            
-            this.Controls.Add(_mainMenuStrip);
-
             this.ResumeLayout(false);
-            this.PerformLayout();
         }
 
         #endregion

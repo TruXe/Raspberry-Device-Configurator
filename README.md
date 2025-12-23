@@ -1,157 +1,107 @@
 # Device Configurator - Raspberry Pi Remote Configuration
 
-Project for remote configuration of Raspberry Pi devices on a local network.
+A comprehensive remote configuration tool for managing Raspberry Pi devices in a local network. This application provides an intuitive Windows-based GUI for discovering, configuring, and monitoring Raspberry Pi devices.
 
-## Architecture
+## 🎯 Overview
 
-- **Client**: C# WinForms application (.NET 6+)
-- **Server**: Python 3 server running on Raspberry Pi
-- **Communication**: TCP on port 7777
-- **Protocol**: JSON over TCP
+Device Configurator consists of two main components:
+- **Client**: C# WinForms application (.NET 6+) for Windows
+- **Server**: Python 3 server running on Raspberry Pi devices
 
-## Features
+The application enables remote configuration of Raspberry Pi devices including network settings, SSH configuration, user management, and static IP assignment with automatic tracking of IP changes.
 
-### Supported Operations
+## ✨ Key Features
 
-- **Network Scanning**: Automatic device discovery by hostname or IP range
-- **Configuration Display**: IP address, hostname, SSH status, root login status
-- **Hostname Change**: Set new hostname
-- **Password Management**: Change password for any user and root
-- **SSH Configuration**: Enable/disable SSH, allow root login
-- **Static IP Address**: Set static IPv4 address with automatic change tracking
-- **Automatic Update**: After IP address change, new configuration is automatically loaded
-- **Multi-language Support**: Czech and English language support
+### Network Discovery
+- **Hostname-based scanning**: Automatically discovers devices by hostname (rasp, local, master, or custom hostname)
+- **IP range scanning**: Scan specific IP ranges (e.g., 192.168.0.1-255)
+- **Real-time status indicators**: TreeView with color-coded status dots:
+  - 🟢 Green: Device online (ping OK, port 7777 responding)
+  - 🟠 Orange: Device reachable (ping OK, but port 7777 not responding)
+  - 🔴 Red: Device offline (ping failed)
 
-## Features
+### Device Configuration
+- **Network settings**: Configure static IPv4 address, netmask, and gateway
+- **Hostname management**: Change device hostname
+- **SSH configuration**: Enable/disable SSH, configure root login
+- **User management**: Set user passwords and root password
+- **Automatic IP tracking**: After changing static IP, the application automatically detects and connects to the new IP address
+- **Context menu actions**: Right-click on devices in TreeView for quick access to:
+  - Download configuration (save to JSON file)
+  - Upload configuration (load from JSON file)
+  - Change root password (via user authentication)
 
-### Debug Functionality
+### Server Management
+- **Server list**: Manage a list of Raspberry Pi servers
+- **Status monitoring**: Automatic status check every 15 seconds
+- **Persistent storage**: Server list saved to `C:\RDC\data\configuration\servers.json`
+- **CRUD operations**: Add, edit, remove servers with custom names, IPs, hostnames, and ports
+- **Context menu actions**: Right-click on servers for:
+  - Download configuration
+  - Upload configuration
+  - Change root password
 
-**Server (Python):**
-- Debug messages are displayed in logs (`/var/log/raspberry_config_server.log` and `journalctl`)
-- Enable/disable: set `DEBUG = True/False` in `raspberry_config_server.py` (line 20)
-- Debug messages contain detailed information about:
-  - Client connections
-  - Received requests
-  - Command processing
-  - Sent responses
+### User Interface
+- **Multi-language support**: Czech and English (default: English)
+- **Modern UI**: Clean, organized layout with docked progress bar
+- **Debug console**: Real-time debug logging for troubleshooting
+- **Configuration import/export**: Save and load device configurations as JSON files
+- **Context menus**: Right-click functionality on TreeView nodes for quick actions
 
-**Client (C#):**
-- Debug console for displaying debug messages
-- Open: click the **"Debug Console"** button in the main window
-- Debug messages include:
-  - Network operations (connection, sending, reading)
-  - JSON parsing
-  - Error states
-  - All configuration operations
+### Application Settings
+- **Persistent configuration**: Settings stored in `C:\RDC\data\configuration\`
+- **Language preference**: Remembers selected language
+- **Server list**: Persists across application restarts
 
-## Project Structure
+## 🏗️ Architecture
 
-```
-DC-Source/
-├── client/                 # C# WinForms client
-│   ├── MainForm.cs        # Main form
-│   ├── ConfigClient.cs    # TCP communication
-│   ├── NetworkScanner.cs  # Network scanning
-│   ├── Localization.cs    # Localization management
-│   ├── Resources/         # Localization resources
-│   └── README.md          # Client documentation
-├── server/                 # Python server
-│   ├── raspberry_config_server.py  # Main server
-│   ├── raspberry-config-server.service  # Systemd service
-│   ├── install.sh         # Installation script
-│   └── README.md          # Server documentation
-├── docs/                   # Documentation (optional)
-├── README.md              # This file
-├── LICENSE                # MIT License
-└── CONTRIBUTING.md        # Contribution guide
-```
+### Communication Protocol
+- **Protocol**: TCP on port 7777
+- **Data format**: JSON over TCP
+- **Authentication**: Token-based authentication
+- **Timeout**: 60 seconds for read operations
 
-## Installation and Running
+### Network Services Support
+The server automatically detects and supports various network managers:
+- **dhcpcd** (standard for Raspberry Pi OS) - modifies `/etc/dhcpcd.conf`
+- **NetworkManager** - uses `nmcli` for configuration
+- **systemd-networkd** - prepared for future implementation
+
+## 📦 Installation
 
 ### Python Server (Raspberry Pi)
 
-#### Requirements
-
-- Raspberry Pi with Raspberry Pi OS (or other Debian-based distribution)
-- Python 3.6 or higher
-- dhcpcd (network manager for static IP configuration)
-- sudo privileges
-
-#### Automatic Installation (recommended)
+#### Automatic Installation (Recommended)
 
 1. **Clone or download the project:**
    ```bash
-   git clone https://github.com/<your-username>/DC-Source.git
+   git clone <repository-url>
    cd DC-Source
    ```
 
-2. **Install dhcpcd (if not installed):**
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y dhcpcd5
-   sudo systemctl enable dhcpcd
-   sudo systemctl start dhcpcd
-   ```
-
-3. **Run the installation script:**
+2. **Run the installation script:**
    ```bash
    cd server
-   sudo chmod +x install.sh
    sudo ./install.sh
    ```
 
 The installation script automatically:
-- Checks and optionally installs Python 3
 - Creates directory `/opt/raspberry-config-server`
 - Copies server files
-- Sets permissions
+- Sets proper permissions
 - Creates log file
 - Installs and starts systemd service
 
 #### Manual Installation
 
-1. **System update:**
-   ```bash
-   sudo apt-get update
-   sudo apt-get upgrade -y
-   ```
-
-2. **Install dhcpcd (if not installed):**
-   ```bash
-   sudo apt-get install -y dhcpcd5
-   sudo systemctl enable dhcpcd
-   sudo systemctl start dhcpcd
-   ```
-
-3. **Check if dhcpcd is active:**
-   ```bash
-   sudo systemctl status dhcpcd
-   ```
-   If not active, run:
-   ```bash
-   sudo systemctl enable dhcpcd
-   sudo systemctl start dhcpcd
-   ```
-
-4. **Install Python 3 (if not installed):**
-   ```bash
-   sudo apt-get install -y python3 python3-pip
-   ```
-
-5. **Copy files:**
+1. **Copy files:**
    ```bash
    sudo mkdir -p /opt/raspberry-config-server
    sudo cp raspberry_config_server.py /opt/raspberry-config-server/
    sudo chmod +x /opt/raspberry-config-server/raspberry_config_server.py
    ```
 
-6. **Create log file:**
-   ```bash
-   sudo touch /var/log/raspberry_config_server.log
-   sudo chmod 644 /var/log/raspberry_config_server.log
-   ```
-
-7. **Install systemd service:**
+2. **Install systemd service:**
    ```bash
    sudo cp raspberry-config-server.service /etc/systemd/system/
    sudo systemctl daemon-reload
@@ -159,155 +109,142 @@ The installation script automatically:
    sudo systemctl start raspberry-config-server
    ```
 
-8. **Check status:**
+3. **Check status:**
    ```bash
    sudo systemctl status raspberry-config-server
    ```
 
-9. **View logs (including debug messages):**
+4. **View logs:**
    ```bash
    sudo journalctl -u raspberry-config-server -f
    ```
 
-#### Installation Verification
-
-1. **Check if server is running:**
-   ```bash
-   sudo systemctl is-active raspberry-config-server
-   ```
-   Should return: `active`
-
-2. **Check if server is listening on port 7777:**
-   ```bash
-   sudo netstat -tlnp | grep 7777
-   ```
-   Or:
-   ```bash
-   sudo ss -tlnp | grep 7777
-   ```
-
-3. **Test connection from another computer:**
-   ```bash
-   telnet <raspberry-pi-ip> 7777
-   ```
-   Or:
-   ```bash
-   nc -zv <raspberry-pi-ip> 7777
-   ```
-
-#### Troubleshooting Installation
-
-**Problem: dhcpcd is not installed or not active**
-
-```bash
-# Install dhcpcd
-sudo apt-get install -y dhcpcd5
-
-# Enable and start service
-sudo systemctl enable dhcpcd
-sudo systemctl start dhcpcd
-
-# Check status
-sudo systemctl status dhcpcd
-```
-
-**Problem: Server won't start**
-
-```bash
-# Check logs
-sudo journalctl -u raspberry-config-server -n 50
-
-# Check Python file syntax
-sudo python3 -m py_compile /opt/raspberry-config-server/raspberry_config_server.py
-
-# Check permissions
-ls -la /opt/raspberry-config-server/
-```
-
-**Problem: Port 7777 is already in use**
-
-```bash
-# Find which process is using the port
-sudo lsof -i :7777
-# or
-sudo netstat -tlnp | grep 7777
-
-# If it's another process, either stop it or change the port in raspberry_config_server.py
-```
-
 ### C# Client (Windows)
 
-1. **Requirements:**
-   - .NET 6 SDK or higher
-   - Windows with WinForms support
+#### Requirements
+- .NET 6 SDK or higher
+- Windows with WinForms support
 
-2. **Compilation:**
+#### Build and Run
+
+1. **Build the application:**
    ```bash
    cd client
    dotnet build
    ```
 
-3. **Running:**
+2. **Run the application:**
    ```bash
    dotnet run
    ```
 
-## Usage
+Or open the solution in Visual Studio and run from there.
 
-### Client Application
+## 🚀 Usage
 
-1. **Start the application** (either from Visual Studio or using `dotnet run`)
-2. **Network Scanning:**
-   - Click **"Scan by Hostname"** for automatic discovery by hostname (rasp, local, master)
-   - Or enter IP range (e.g., `192.168.0.1-255`) and click **"Scan Range"**
-3. **Device Selection:**
-   - Select device from the list (displays IP address, hostname, and status)
-   - Configuration is automatically loaded
-4. **Configuration Edit:**
+### Main Application
+
+1. **Start the application** (from Visual Studio or using `dotnet run`)
+
+2. **Scan for devices:**
+   - **By hostname**: Enter a custom hostname (optional) and click "Scan by hostname"
+   - **By IP range**: Enter IP range (e.g., `192.168.0.1-255`) and click "Scan range"
+
+3. **Select a device:**
+   - Click on a device in the TreeView
+   - Configuration will be automatically loaded
+   - Status indicators show device availability
+
+4. **Edit configuration:**
    - Change hostname, passwords, SSH settings, or static IP address
-   - For static IP enter: IP address, netmask (default 255.255.255.0), gateway (optional)
-5. **Save Changes:**
-   - Click **"Save Changes"**
-   - If you changed static IP, the application automatically tracks the change and loads new configuration
+   - For static IP: Enter IP address, netmask (default: 255.255.255.0), and gateway (optional)
 
-### Language Selection
+5. **Save changes:**
+   - Click "Save changes"
+   - If static IP was changed, the application automatically tracks the IP change and loads new configuration
 
-The application supports multiple languages:
-- **English** (default)
-- **Czech**
+6. **Context menu actions (right-click on device):**
+   - **Download configuration**: Save current device configuration to JSON file
+   - **Upload configuration**: Load configuration from JSON file and apply to device
+   - **Change root password**: Open dialog to change root password (requires user credentials)
 
-To change language:
-- Go to **Language** menu in the menu bar
-- Select **English** or **Čeština**
-- The UI will update immediately
+### Server Management
 
-### Static IP Address
+1. **Open server management:**
+   - Click "Raspberry" → "Servers" in the menu
 
-After setting static IP address:
-- Application automatically checks the new IP address every 2 seconds
+2. **Add a server:**
+   - Click "Add" button
+   - Enter server name, IP address, hostname, and port
+   - Click "OK"
+
+3. **Monitor servers:**
+   - Server status is automatically checked every 15 seconds
+   - Status indicators show online/offline state
+   - Click "Refresh" for manual status update
+
+4. **Context menu actions (right-click on server):**
+   - **Download configuration**: Download and save server configuration
+   - **Upload configuration**: Upload and apply configuration from file
+   - **Change root password**: Change root password via user authentication
+
+### Static IP Address Tracking
+
+After setting a static IP address:
+- Application automatically pings the new IP address every 5 seconds
 - After successful change, new configuration is automatically loaded
-- Status message shows progress: "Pinging IP 10.0.0.50... (attempt 1, 58s remaining)"
-- Timeout is 60 seconds
+- Status message shows progress: "Waiting for IP address change to 10.0.0.50... (25s)"
+- Timeout is 5 minutes (60 attempts)
+
+### Configuration Import/Export
+
+1. **Export configuration:**
+   - Right-click on device → "Download configuration"
+   - Or use menu: "Config" → "Download configuration"
+   - Choose save location
+   - Configuration is saved as JSON
+
+2. **Import configuration:**
+   - Right-click on device → "Upload configuration"
+   - Or use menu: "Config" → "Upload configuration"
+   - Select JSON file
+   - Configuration is applied to selected device
+
+### Change Root Password
+
+1. **Via context menu:**
+   - Right-click on device or server in TreeView
+   - Select "Change root password"
+
+2. **Enter credentials:**
+   - Username (e.g., "rasp")
+   - User password
+   - New root password
+   - Confirm new root password
+
+3. **Apply:**
+   - Click "OK" to change root password
+   - Application will connect to device and update root password
 
 ### Debug Console
 
-- Click the **"Debug Console"** button to open debug window
-- Debug window displays all debug messages in real-time
-- Use **"Clear"** to clear messages
-- **"Auto Scroll"** automatically scrolls to new messages
+- Click "Debug Console" button to open debug window
+- Debug window shows all debug messages in real-time
+- Use "Clear" to clear messages
+- "Auto-scroll" automatically scrolls to new messages
 
-## Configuration
+### Language Settings
 
-### Enable/disable debug messages on server
+- Click "Language" in the menu
+- Select "Čeština" (Czech) or "English"
+- Language change takes effect after application restart
+- Default language: English
 
-In file `raspberry_config_server.py`:
-```python
-DEBUG = True  # Enable debug messages
-# or
-DEBUG = False  # Disable debug messages
-```
+## ⚙️ Configuration
 
-### Change authentication token
+### Server Configuration
+
+#### Change Authentication Token
 
 **IMPORTANT**: Change the default authentication token!
 
@@ -321,22 +258,50 @@ AUTH_TOKEN = "your_new_secure_token"
 private readonly string _authToken = "your_new_secure_token";
 ```
 
-## Supported Network Services
+After changing, restart the server:
+```bash
+sudo systemctl restart raspberry-config-server
+```
 
-Server automatically detects and supports various network managers:
+#### Enable/Disable Debug Messages
 
-- **dhcpcd** (standard for Raspberry Pi OS) - modifies `/etc/dhcpcd.conf`
-- **NetworkManager** - uses `nmcli` for configuration
-- **systemd-networkd** - prepared for future implementation
+In `raspberry_config_server.py`:
+```python
+DEBUG = True  # Enable debug messages
+# or
+DEBUG = False  # Disable debug messages
+```
 
-## Security Warning
+After changing, restart the server:
+```bash
+sudo systemctl restart raspberry-config-server
+```
 
-⚠️ **IMPORTANT SECURITY WARNING**
+#### Change Port
+
+In `raspberry_config_server.py`:
+```python
+SERVER_PORT = 7777  # Change to desired port
+```
+
+Update client `ConfigClient.cs` accordingly and restart both.
+
+### Client Configuration
+
+#### Application Settings Location
+- Settings: `C:\RDC\data\configuration\settings.json`
+- Servers: `C:\RDC\data\configuration\servers.json`
+
+Settings are automatically created on first run.
+
+## 🔒 Security Warnings
+
+⚠️ **IMPORTANT SECURITY WARNINGS**
 
 1. **Authentication Token:**
    - Default token (`raspberry_config_secret_2024`) is for testing only!
    - **Always change** the authentication token to a strong, random string
-   - Change token in `raspberry_config_server.py` (line 18) and `ConfigClient.cs`
+   - Change token in both `raspberry_config_server.py` and `ConfigClient.cs`
 
 2. **SSH Root Login:**
    - Enabling SSH root login is a **security risk**
@@ -344,18 +309,61 @@ Server automatically detects and supports various network managers:
 
 3. **Network Security:**
    - Server listens on `0.0.0.0` (all interfaces)
-   - Consider using firewall to limit access
-   - We recommend using firewall rule to allow only from trusted IP addresses
+   - Consider using firewall to restrict access
+   - Recommended: firewall rule to allow only from trusted IP addresses
 
 4. **Passwords:**
    - Passwords are transmitted over TCP in plaintext (JSON)
    - Use only in trusted local networks
    - For production use, consider implementing TLS/SSL encryption
 
-## Troubleshooting
+5. **Root Password Change:**
+   - Root password change requires user credentials
+   - User credentials are transmitted in plaintext
+   - Ensure secure network environment
 
-### Debug messages on server
+## 🐛 Troubleshooting
 
+### Server Issues
+
+#### Server won't start
+- Check logs: `sudo journalctl -u raspberry-config-server -n 50`
+- Check syntax: `sudo python3 -m py_compile /opt/raspberry-config-server/raspberry_config_server.py`
+- Verify permissions: `ls -l /opt/raspberry-config-server/raspberry_config_server.py`
+
+#### Server not responding
+- Check if service is running: `sudo systemctl status raspberry-config-server`
+- Check firewall: `sudo ufw status` or `sudo iptables -L`
+- Verify port is open: `sudo netstat -tlnp | grep 7777`
+
+### Client Issues
+
+#### Client can't find devices
+- Ensure device is on the same network
+- Check firewall on Raspberry Pi
+- Use IP range scanning instead of hostname scanning
+- Check if port 7777 is accessible: `telnet <raspberry-ip> 7777`
+
+#### Configuration not loading
+- Open Debug Console to see detailed error messages
+- Verify device is selected in TreeView
+- Check network connectivity
+- Verify authentication token matches on both client and server
+
+#### Status indicators not updating
+- Status check runs every 15 seconds automatically
+- Click "Refresh" button for manual update
+- Check if device responds to ping
+- Verify port 7777 is open on device
+
+#### Context menu not working
+- Ensure device/server is selected in TreeView
+- Right-click directly on the TreeView node
+- Check if device is online (green/orange indicator)
+
+### Debug Information
+
+#### Server Debug Messages
 Check logs:
 ```bash
 sudo journalctl -u raspberry-config-server -f
@@ -363,19 +371,68 @@ sudo journalctl -u raspberry-config-server -f
 
 Debug messages start with `DEBUG:` prefix.
 
-### Debug messages on client
+#### Client Debug Messages
+1. Open Debug Console by clicking "Debug Console" button
+2. Try the operation again
+3. Review debug messages in console
 
-1. Open Debug Console by clicking the **"Debug Console"** button
-2. Try performing the operation again
-3. Look at debug messages in the console
+## 📁 Project Structure
 
-### Server won't start
+```
+DC-Source/
+├── client/                          # C# WinForms client
+│   ├── MainForm.cs                  # Main application form
+│   ├── MainForm.Designer.cs         # UI layout definition
+│   ├── ConfigClient.cs              # TCP communication with server
+│   ├── NetworkScanner.cs            # Network scanning functionality
+│   ├── Localization.cs              # Multi-language support
+│   ├── AppSettings.cs               # Application settings management
+│   ├── ServersForm.cs               # Server management form
+│   ├── ServerEditDialog.cs          # Server add/edit dialog
+│   ├── ServerInfo.cs                # Server information class
+│   ├── ChangeRootPasswordDialog.cs  # Root password change dialog
+│   ├── DebugConsole.cs              # Debug console window
+│   ├── DebugLogger.cs               # Debug logging utility
+│   ├── Program.cs                   # Application entry point
+│   └── DeviceConfigurator.csproj   # Project file
+├── server/                           # Python server
+│   ├── raspberry_config_server.py   # Main server application
+│   ├── raspberry-config-server.service  # Systemd service file
+│   ├── install.sh                   # Installation script
+│   └── README.md                    # Server documentation
+├── docs/                             # Additional documentation
+├── README.md                         # This file
+├── LICENSE                           # MIT License
+└── CONTRIBUTING.md                   # Contribution guide
+```
 
-- Check logs: `sudo journalctl -u raspberry-config-server -n 50`
-- Check syntax: `sudo python3 -m py_compile /opt/raspberry-config-server/raspberry_config_server.py`
+## 🔄 Supported Operations
 
-### Client can't find device
+### Server Commands
+- `get_config` - Get current device configuration
+- `set_hostname` - Change device hostname
+- `set_user_password` - Set password for a user
+- `set_root_password` - Set root password
+- `set_ssh_enabled` - Enable/disable SSH
+- `set_root_login` - Enable/disable SSH root login
+- `set_static_ip` - Configure static IPv4 address
 
-- Check if device is on the same network
-- Check firewall on Raspberry Pi
-- Use IP range scanning instead of hostname scanning
+### Server Response Status
+- `ok` - Operation successful
+- `error` - Operation failed (with error message)
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## 📧 Support
+
+For issues, questions, or contributions, please open an issue on the project repository.
+
+---
+
+**Note**: This application is designed for use in trusted local networks. For production deployments, implement additional security measures such as TLS/SSL encryption and stronger authentication mechanisms.
