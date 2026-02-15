@@ -1,0 +1,39 @@
+# Build C# WinForms client for Raspberry-Device-Configurator
+# https://github.com/TruXe/Raspberry-Device-Configurator
+
+name: Build C# Client
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore client/DeviceConfigurator.csproj
+
+      - name: Build
+        run: dotnet build client/DeviceConfigurator.csproj --configuration Release --no-restore
+
+      - name: Publish (artifact)
+        run: dotnet publish client/DeviceConfigurator.csproj -c Release -o publish --no-build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceConfigurator-win
+          path: publish/
